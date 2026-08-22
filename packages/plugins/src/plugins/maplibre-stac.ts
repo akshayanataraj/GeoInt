@@ -820,7 +820,7 @@ async function visualizeAsset(
 /** An item's descriptive title when available, otherwise its stable identifier. */
 function itemTitle(item: StacItem): string {
   const title = item.properties.title;
-  return typeof title === "string" && title.trim() ? title : item.id;
+  return typeof title === "string" && title.trim() ? title : (item.collection ?? item.id);
 }
 
 function buildPanel(container: HTMLElement): () => void {
