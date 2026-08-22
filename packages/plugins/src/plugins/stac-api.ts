@@ -360,6 +360,35 @@ function collectionBbox(
   return horizontalBbox(Array.isArray(boxes) ? boxes[0] : undefined);
 }
 
+/** Presents a Collection's own assets as one item so the existing asset browser can render it. */
+function collectionAssetItem(document: Record<string, unknown>, url: string): StacItem | undefined {
+  if (document.type !== "Collection" || typeof document.id !== "string") return undefined;
+  if (typeof document.assets !== "object" || document.assets === null) return undefined;
+  const assets = document.assets as Record<string, StacAsset>;
+  if (!Object.keys(assets).length) return undefined;
+  const extent = document.extent as StacCollection["extent"] | undefined;
+  const interval = extent?.temporal?.interval?.[0];
+  const start = interval?.[0] ?? undefined;
+  const end = interval?.[1] ?? undefined;
+  return normalizeItem(
+    {
+      type: "Feature",
+      id: document.id,
+      collection: document.id,
+      geometry: null,
+      bbox: collectionBbox(document),
+      properties: {
+        ...(start && start === end ? { datetime: start } : {}),
+        ...(start && start !== end ? { start_datetime: start } : {}),
+        ...(end && start !== end ? { end_datetime: end } : {}),
+      },
+      assets,
+      links: linksOf(document.links, url),
+    },
+    url,
+  );
+}
+
 export async function openCatalogNode(
   href: string,
   fetcher: FetchLike = fetch,
@@ -609,6 +638,8 @@ export async function searchStaticStac(
 
   const collect = (document: Record<string, unknown>, url: string): void => {
     if (document.type !== "Feature") {
+      const collectionItem = collectionAssetItem(document, url);
+      if (collectionItem && accepts(collectionItem)) found.push(collectionItem);
       for (const link of linksOf(document.links, url)) {
         if (link.rel === "item") walk.items.push({ url: link.href });
         else if (link.rel === "child") walk.folders.push({ url: link.href });

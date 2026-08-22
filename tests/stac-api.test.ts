@@ -1074,6 +1074,34 @@ test("searchStaticStac traverses child and item links and applies filters", asyn
   );
 });
 
+test("searchStaticStac exposes assets attached directly to a Collection", async () => {
+  const url = "https://example.com/data/collection.json";
+  const root = {
+    type: "Collection",
+    id: "collection-assets",
+    extent: {
+      spatial: { bbox: [[4.8, 52, 5.2, 52.2]] },
+      temporal: { interval: [["2020-02-05T00:00:00Z", null]] },
+    },
+    assets: {
+      geoparquet: { href: "data.parquet", type: "application/vnd.apache.parquet" },
+      pmtiles: { href: "tiles.pmtiles", type: "application/vnd.pmtiles" },
+    },
+    links: [],
+  };
+
+  const result = await searchStaticStac(
+    { url, title: "Static collection", isApi: false, collections: [], root },
+    { limit: 20 },
+  );
+
+  assert.equal(result.matched, 1);
+  assert.equal(result.items[0].id, "collection-assets");
+  assert.deepEqual(result.items[0].bbox, [4.8, 52, 5.2, 52.2]);
+  assert.equal(result.items[0].assets.geoparquet.href, "https://example.com/data/data.parquet");
+  assert.equal(result.items[0].assets.pmtiles.href, "https://example.com/data/tiles.pmtiles");
+});
+
 test("searchStaticStac pages through a catalog holding more items than one page fits", async () => {
   const total = 25;
   const docs: Record<string, unknown> = {
