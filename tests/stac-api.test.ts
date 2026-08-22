@@ -1079,6 +1079,7 @@ test("searchStaticStac exposes assets attached directly to a Collection", async 
   const root = {
     type: "Collection",
     id: "collection-assets",
+    title: "Collection assets",
     extent: {
       spatial: {
         bbox: [
@@ -1107,6 +1108,7 @@ test("searchStaticStac exposes assets attached directly to a Collection", async 
 
   assert.equal(result.matched, 1);
   assert.equal(result.items[0].id, "collection-assets::collection-assets");
+  assert.equal(result.items[0].properties.title, "Collection assets");
   assert.deepEqual(result.items[0].bbox, [4.8, 52, 5.2, 52.2]);
   assert.equal(result.items[0].assets.geoparquet.href, "https://example.com/data/data.parquet");
   assert.equal(result.items[0].assets.pmtiles.href, "https://example.com/data/tiles.pmtiles");
@@ -1132,6 +1134,17 @@ test("searchStaticStac exposes assets attached directly to a Collection", async 
     { datetime: "1900-01-01", limit: 20 },
   );
   assert.equal(beforeOpenEnd.matched, 1);
+
+  const unknownExtents = {
+    ...root,
+    extent: { spatial: { bbox: {} as unknown as number[][] } },
+  };
+  const unknownTime = await searchStaticStac(
+    { url, title: "Static collection", isApi: false, collections: [], root: unknownExtents },
+    { datetime: "2024-01-01", limit: 20 },
+  );
+  assert.equal(unknownTime.matched, 1);
+  assert.equal(unknownTime.items[0].bbox, undefined);
 });
 
 test("searchStaticStac pages through a catalog holding more items than one page fits", async () => {

@@ -368,7 +368,8 @@ function collectionAssetItem(document: Record<string, unknown>, url: string): St
   const assets = document.assets as Record<string, StacAsset>;
   if (!Object.keys(assets).length) return undefined;
   const extent = document.extent as StacCollection["extent"] | undefined;
-  const spatialBboxes = (extent?.spatial?.bbox ?? []).flatMap((bbox) => {
+  const spatialBoxes = extent?.spatial?.bbox;
+  const spatialBboxes = (Array.isArray(spatialBoxes) ? spatialBoxes : []).flatMap((bbox) => {
     const horizontal = horizontalBbox(bbox);
     return horizontal ? [horizontal] : [];
   });
@@ -554,14 +555,15 @@ function inTime(item: StacItem, interval?: string): boolean {
   const queryStart = rawStart === ".." ? undefined : Date.parse(rawStart);
   const queryEnd = rawEnd === ".." ? undefined : Date.parse(rawEnd);
   const advertised = item.properties["geolibre:temporal_intervals"];
-  const intervals = Array.isArray(advertised)
-    ? advertised
-    : [
-        [
-          item.properties.datetime ?? item.properties.start_datetime ?? null,
-          item.properties.datetime ?? item.properties.end_datetime ?? null,
-        ],
-      ];
+  const intervals =
+    Array.isArray(advertised) && advertised.length
+      ? advertised
+      : [
+          [
+            item.properties.datetime ?? item.properties.start_datetime ?? null,
+            item.properties.datetime ?? item.properties.end_datetime ?? null,
+          ],
+        ];
   return intervals.some((candidate) => {
     if (!Array.isArray(candidate)) return false;
     const itemStart = candidate[0] === null ? undefined : Date.parse(String(candidate[0] ?? ""));
