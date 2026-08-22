@@ -60,6 +60,7 @@ export interface StacItem extends Feature<Geometry | null> {
   properties: Record<string, unknown> & {
     datetime?: string;
     start_datetime?: string;
+    end_datetime?: string;
     "table:storage_options"?: StorageOptions;
     "xarray:open_kwargs"?: XarrayOpenKwargs;
     "icechunk:branch"?: string;
@@ -367,23 +368,30 @@ function collectionAssetItem(document: Record<string, unknown>, url: string): St
   const assets = document.assets as Record<string, StacAsset>;
   if (!Object.keys(assets).length) return undefined;
   const extent = document.extent as StacCollection["extent"] | undefined;
+  const spatialBboxes = (extent?.spatial?.bbox ?? []).flatMap((bbox) => {
+    const horizontal = horizontalBbox(bbox);
+    return horizontal ? [horizontal] : [];
+  });
   const interval = extent?.temporal?.interval?.[0];
   const start = interval?.[0] ?? undefined;
   const end = interval?.[1] ?? undefined;
   return normalizeItem(
     {
       type: "Feature",
-      id: document.id,
+      id: `${document.id}::collection-assets`,
       collection: document.id,
       geometry: null,
       bbox: collectionBbox(document),
       properties: {
+        ...(typeof document.title === "string" ? { title: document.title } : {}),
+        ...(typeof document.description === "string" ? { description: document.description } : {}),
+        "geolibre:spatial_bboxes": spatialBboxes,
         ...(start && start === end ? { datetime: start } : {}),
         ...(start && start !== end ? { start_datetime: start } : {}),
         ...(end && start !== end ? { end_datetime: end } : {}),
       },
       assets,
-      links: linksOf(document.links, url),
+      links: document.links as StacLink[] | undefined,
     },
     url,
   );
@@ -541,15 +549,18 @@ function intersects(a: number[], b: [number, number, number, number]): boolean {
 function inTime(item: StacItem, interval?: string): boolean {
   if (!interval) return true;
   const [rawStart, rawEnd = rawStart] = interval.split("/");
-  const start = rawStart === ".." ? undefined : rawStart;
-  const end = rawEnd === ".." ? undefined : rawEnd;
-  const value = item.properties.datetime ?? item.properties.start_datetime;
-  if (!value) return true;
-  const time = Date.parse(String(value));
+  const queryStart = rawStart === ".." ? undefined : Date.parse(rawStart);
+  const queryEnd = rawEnd === ".." ? undefined : Date.parse(rawEnd);
+  const itemStart = Date.parse(
+    String(item.properties.datetime ?? item.properties.start_datetime ?? ""),
+  );
+  const itemEnd = Date.parse(
+    String(item.properties.datetime ?? item.properties.end_datetime ?? ""),
+  );
+  if (!Number.isFinite(itemStart) && !Number.isFinite(itemEnd)) return true;
   return (
-    Number.isFinite(time) &&
-    (!start || time >= Date.parse(start)) &&
-    (!end || time <= Date.parse(end))
+    (queryEnd === undefined || !Number.isFinite(itemStart) || itemStart <= queryEnd) &&
+    (queryStart === undefined || !Number.isFinite(itemEnd) || itemEnd >= queryStart)
   );
 }
 
@@ -592,7 +603,11 @@ export async function searchStaticStac(
     if (filters.collections?.length && !filters.collections.includes(item.collection ?? "")) {
       return false;
     }
-    if (filters.bbox && !(bbox && intersects(bbox, filters.bbox))) return false;
+    const collectionBboxes = item.properties["geolibre:spatial_bboxes"];
+    const bboxes = Array.isArray(collectionBboxes) ? collectionBboxes : bbox ? [bbox] : [];
+    if (filters.bbox && !bboxes.some((candidate) => intersects(candidate, filters.bbox!))) {
+      return false;
+    }
     return inTime(item, filters.datetime);
   };
 
