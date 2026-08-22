@@ -817,7 +817,7 @@ async function visualizeAsset(
   }
 }
 
-/** A catalog's descriptive title when available, otherwise its stable item identifier. */
+/** An item's descriptive title when available, otherwise its stable identifier. */
 function itemTitle(item: StacItem): string {
   const title = item.properties.title;
   return typeof title === "string" && title.trim() ? title : item.id;
