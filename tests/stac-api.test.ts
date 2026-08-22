@@ -1086,7 +1086,12 @@ test("searchStaticStac exposes assets attached directly to a Collection", async 
           [10, 60, 11, 61],
         ],
       },
-      temporal: { interval: [["2020-01-01T00:00:00Z", "2020-12-31T23:59:59Z"]] },
+      temporal: {
+        interval: [
+          ["2020-01-01T00:00:00Z", "2020-12-31T23:59:59Z"],
+          ["2022-01-01T00:00:00Z", "2022-12-31T23:59:59Z"],
+        ],
+      },
     },
     assets: {
       geoparquet: { href: "data.parquet", type: "application/vnd.apache.parquet" },
@@ -1111,6 +1116,12 @@ test("searchStaticStac exposes assets attached directly to a Collection", async 
     { datetime: "2021-01-01", limit: 20 },
   );
   assert.equal(outsideTime.matched, 0);
+
+  const laterInterval = await searchStaticStac(
+    { url, title: "Static collection", isApi: false, collections: [], root },
+    { datetime: "2022-06-01", limit: 20 },
+  );
+  assert.equal(laterInterval.matched, 1);
 
   const openEnded = {
     ...root,

@@ -372,7 +372,8 @@ function collectionAssetItem(document: Record<string, unknown>, url: string): St
     const horizontal = horizontalBbox(bbox);
     return horizontal ? [horizontal] : [];
   });
-  const interval = extent?.temporal?.interval?.[0];
+  const temporalIntervals = extent?.temporal?.interval ?? [];
+  const interval = temporalIntervals[0];
   const start = interval?.[0] ?? undefined;
   const end = interval?.[1] ?? undefined;
   return normalizeItem(
@@ -386,6 +387,7 @@ function collectionAssetItem(document: Record<string, unknown>, url: string): St
         ...(typeof document.title === "string" ? { title: document.title } : {}),
         ...(typeof document.description === "string" ? { description: document.description } : {}),
         "geolibre:spatial_bboxes": spatialBboxes,
+        "geolibre:temporal_intervals": temporalIntervals,
         ...(start && start === end ? { datetime: start } : {}),
         ...(start && start !== end ? { start_datetime: start } : {}),
         ...(end && start !== end ? { end_datetime: end } : {}),
@@ -551,17 +553,25 @@ function inTime(item: StacItem, interval?: string): boolean {
   const [rawStart, rawEnd = rawStart] = interval.split("/");
   const queryStart = rawStart === ".." ? undefined : Date.parse(rawStart);
   const queryEnd = rawEnd === ".." ? undefined : Date.parse(rawEnd);
-  const itemStart = Date.parse(
-    String(item.properties.datetime ?? item.properties.start_datetime ?? ""),
-  );
-  const itemEnd = Date.parse(
-    String(item.properties.datetime ?? item.properties.end_datetime ?? ""),
-  );
-  if (!Number.isFinite(itemStart) && !Number.isFinite(itemEnd)) return true;
-  return (
-    (queryEnd === undefined || !Number.isFinite(itemStart) || itemStart <= queryEnd) &&
-    (queryStart === undefined || !Number.isFinite(itemEnd) || itemEnd >= queryStart)
-  );
+  const advertised = item.properties["geolibre:temporal_intervals"];
+  const intervals = Array.isArray(advertised)
+    ? advertised
+    : [
+        [
+          item.properties.datetime ?? item.properties.start_datetime ?? null,
+          item.properties.datetime ?? item.properties.end_datetime ?? null,
+        ],
+      ];
+  return intervals.some((candidate) => {
+    if (!Array.isArray(candidate)) return false;
+    const itemStart = candidate[0] === null ? undefined : Date.parse(String(candidate[0] ?? ""));
+    const itemEnd = candidate[1] === null ? undefined : Date.parse(String(candidate[1] ?? ""));
+    if (!Number.isFinite(itemStart) && !Number.isFinite(itemEnd)) return true;
+    return (
+      (queryEnd === undefined || itemStart === undefined || itemStart <= queryEnd) &&
+      (queryStart === undefined || itemEnd === undefined || itemEnd >= queryStart)
+    );
+  });
 }
 
 /** Searches a static catalog by following child/item links, with a hard safety cap. */
