@@ -6787,6 +6787,15 @@
     "opacityFor": "{{name}} 的不透明度",
     "opacityValueInputAria": "{{label}} 值",
     "opacityValueEditAria": "编辑 {{label}} 值",
+    "blendMode": "混合",
+    "blendModeFor": "{{name}} 的混合模式",
+    "blendModes": {
+      "normal": "正常",
+      "multiply": "正片叠底",
+      "screen": "滤色",
+      "lighten": "变亮",
+      "add": "线性减淡"
+    },
     "basemapOpacity": "底图不透明度",
     "newGroup": "新建分组",
     "basemaps": "底图",

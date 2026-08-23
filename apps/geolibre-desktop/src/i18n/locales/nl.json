@@ -6864,6 +6864,15 @@
     "opacityFor": "Dekking voor {{name}}",
     "opacityValueInputAria": "Waarde {{label}}",
     "opacityValueEditAria": "Waarde {{label}} bewerken",
+    "blendMode": "Mengen",
+    "blendModeFor": "Mengmodus voor {{name}}",
+    "blendModes": {
+      "normal": "Normaal",
+      "multiply": "Vermenigvuldigen",
+      "screen": "Bleken",
+      "lighten": "Lichter",
+      "add": "Optellen"
+    },
     "basemapOpacity": "Dekking achtergrondkaart",
     "newGroup": "Nieuwe groep",
     "basemaps": "Achtergrondkaarten",

@@ -6864,6 +6864,15 @@
     "opacityFor": "{{name}}-ის გამჭვირვალობა",
     "opacityValueInputAria": "{{label}} მნიშვნელობა",
     "opacityValueEditAria": "{{label}} მნიშვნელობის რედაქტირება",
+    "blendMode": "შერევა",
+    "blendModeFor": "{{name}}-ის შერევის რეჟიმი",
+    "blendModes": {
+      "normal": "ჩვეულებრივი",
+      "multiply": "გამრავლება",
+      "screen": "ეკრანი",
+      "lighten": "გაღიავება",
+      "add": "მიმატება"
+    },
     "basemapOpacity": "ბაზური რუკის გამჭვირვალობა",
     "newGroup": "ახალი ჯგუფი",
     "basemaps": "ბაზური რუკები",

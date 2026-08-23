@@ -6864,6 +6864,15 @@
     "opacityFor": "Opacity for {{name}}",
     "opacityValueInputAria": "{{label}} value",
     "opacityValueEditAria": "Edit {{label}} value",
+    "blendMode": "Blend",
+    "blendModeFor": "Blend mode for {{name}}",
+    "blendModes": {
+      "normal": "Normal",
+      "multiply": "Multiply",
+      "screen": "Screen",
+      "lighten": "Lighten",
+      "add": "Add"
+    },
     "basemapOpacity": "Basemap opacity",
     "newGroup": "New group",
     "basemaps": "Basemaps",

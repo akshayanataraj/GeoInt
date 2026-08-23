@@ -9,6 +9,52 @@ The **Layers panel** on the left lists every layer in the project, from the topm
 - **Visibility**: click the eye button to show or hide a layer. The **Hide all layers** button at the top of the panel hides every layer at once.
 - **Order**: drag a layer to reorder it, or use the move up and move down actions. Layers higher in the list draw on top. The basemap (**Background**) always stays at the bottom.
 - **Opacity**: each layer has an opacity slider from 0 to 100 percent.
+- **Blend**: how the layer combines with whatever is drawn beneath it (see below).
+
+## Blend modes
+
+Beside the opacity slider, each layer has a **Blend** menu that controls how its
+colours combine with the map below it. Opacity dilutes a layer; a blend mode
+mixes it, so the layers underneath still read through at full saturation.
+
+The classic use is shading: put a hillshade, a terrain raster, or a dark
+basemap under a thematic fill or an aerial image, set the top layer to
+**Multiply**, and the relief shows through the colour instead of being hidden by
+it. Lowering opacity instead would wash out both.
+
+| Mode | What it does | Typical use |
+| --- | --- | --- |
+| **Normal** | Ordinary transparency — the default | Everything else |
+| **Multiply** | Darkens: the two colours are multiplied | Colour or imagery over a hillshade; adding shadow |
+| **Screen** | Lightens: the inverse of Multiply | Lifting a dark layer out of a dark basemap |
+| **Lighten** | Keeps whichever colour is brighter | Overlaying bright features without darkening the map |
+| **Add** | Sums the colours, clipping toward white | Glow effects, heat and density overlays |
+
+Blending applies to a layer's fills, outlines, points, markers, and raster
+tiles. **Labels are deliberately excluded** and always draw normally, so place
+names stay legible over a multiplied hillshade.
+
+A blend mode is saved with the project and travels with a copied style, but it
+is a GeoLibre rendering setting with no equivalent in the MapLibre or Mapbox
+style specification, so it is dropped when you export a layer's style to a style
+file, SLD, or QML.
+
+!!! note "Why these five modes"
+
+    MapLibre draws every layer into one WebGL canvas and offers no per-layer
+    blending API, so GeoLibre applies these modes inside the renderer using the
+    GPU's fixed-function blend stage. That stage can express these five and no
+    more. Photoshop-style modes such as Overlay, Colour Dodge, and Soft Light
+    need to read the colours already on the canvas from inside a shader, which
+    is not possible here without an extra full-frame copy on every draw. Darken
+    and Subtract are not offered either: their GPU equations also act on the
+    transparency channel, which would erase the map wherever the layer does not
+    cover it. See [maplibre-gl-js#8073](https://github.com/maplibre/maplibre-gl-js/pull/8073)
+    for the upstream work that would widen this list.
+
+Layers painted by a plugin with their own WebGL renderer (deck.gl overlays, 3D
+Tiles, Gaussian splats) draw outside MapLibre's render loop, so they have no
+Blend menu.
 
 ## Per-layer actions
 

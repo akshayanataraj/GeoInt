@@ -76,6 +76,7 @@ kepler.gl, see the [Comparison](comparison.md).
 - Layer panel for visibility, opacity, reordering, rename, zoom-to-layer, identify, labels, open attribute table, open Style panel, export, and remove actions. Selecting a layer never pops the Style panel open over the map on its own; it expands from a palette button on the layer card or from the matching menu item
     - A per-row symbology swatch (dot, line, square, or image glyph) colored from the layer's own styling
     - Copy and paste of a layer's style onto another layer
+    - **Cartographic blend modes** (Multiply, Screen, Lighten, Add) that composite a layer with the map beneath it instead of just fading it, so colour or imagery over a hillshade keeps the relief visible at full saturation; applied inside MapLibre's render loop, so it works on vector and raster layers alike, in the right z-position, with labels left legible. See [Blend modes](user-guide/layers.md#blend-modes)
     - A metadata dialog that reads a raster's real georeferencing from the GeoTIFF header: CRS and EPSG code, pixel size and extent in CRS units, data type, nodata, compression, tiling, and overviews
     - A Search places box in the footer that geocodes to a location, flies straight to a typed coordinate in decimal degrees, DMS, or DDM, or flies to an H3 cell index typed as either a hexadecimal string or a 64-bit integer (framing and outlining the cell) — all without leaving the panel
 - Nested layer groups that give the layer stack a real hierarchy. See [Layer groups](user-guide/layers.md#layer-groups)

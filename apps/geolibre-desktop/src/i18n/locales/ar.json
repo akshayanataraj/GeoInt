@@ -7171,6 +7171,15 @@
     "opacityFor": "عتامة {{name}}",
     "opacityValueInputAria": "قيمة {{label}}",
     "opacityValueEditAria": "تحرير قيمة {{label}}",
+    "blendMode": "المزج",
+    "blendModeFor": "وضع المزج لـ {{name}}",
+    "blendModes": {
+      "normal": "عادي",
+      "multiply": "ضرب",
+      "screen": "شاشة",
+      "lighten": "تفتيح",
+      "add": "إضافة"
+    },
     "basemapOpacity": "عتامة خريطة الأساس",
     "newGroup": "مجموعة جديدة",
     "basemaps": "خرائط الأساس",

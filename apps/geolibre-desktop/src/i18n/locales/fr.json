@@ -6864,6 +6864,15 @@
     "opacityFor": "Opacité de {{name}}",
     "opacityValueInputAria": "Valeur de {{label}}",
     "opacityValueEditAria": "Modifier la valeur de {{label}}",
+    "blendMode": "Fusion",
+    "blendModeFor": "Mode de fusion de {{name}}",
+    "blendModes": {
+      "normal": "Normal",
+      "multiply": "Produit",
+      "screen": "Superposition",
+      "lighten": "Éclaircir",
+      "add": "Addition"
+    },
     "basemapOpacity": "Opacité du fond de carte",
     "newGroup": "Nouveau groupe",
     "basemaps": "Fonds de carte",

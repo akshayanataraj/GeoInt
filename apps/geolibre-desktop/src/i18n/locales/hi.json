@@ -6864,6 +6864,15 @@
     "opacityFor": "{{name}} के लिए अपारदर्शिता",
     "opacityValueInputAria": "{{label}} मान",
     "opacityValueEditAria": "{{label}} मान संपादित करें",
+    "blendMode": "ब्लेंड",
+    "blendModeFor": "{{name}} के लिए ब्लेंड मोड",
+    "blendModes": {
+      "normal": "सामान्य",
+      "multiply": "मल्टिप्लाई",
+      "screen": "स्क्रीन",
+      "lighten": "हल्का करें",
+      "add": "जोड़ें"
+    },
     "basemapOpacity": "बेसमैप अपारदर्शिता",
     "newGroup": "नया समूह",
     "basemaps": "बेसमैप",

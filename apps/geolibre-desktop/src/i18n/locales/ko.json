@@ -6787,6 +6787,15 @@
     "opacityFor": "{{name}}의 불투명도",
     "opacityValueInputAria": "{{label}} 값",
     "opacityValueEditAria": "{{label}} 값 편집",
+    "blendMode": "혼합",
+    "blendModeFor": "{{name}}의 혼합 모드",
+    "blendModes": {
+      "normal": "표준",
+      "multiply": "곱하기",
+      "screen": "스크린",
+      "lighten": "밝게",
+      "add": "더하기"
+    },
     "basemapOpacity": "배경지도 불투명도",
     "newGroup": "새 그룹",
     "basemaps": "배경지도",

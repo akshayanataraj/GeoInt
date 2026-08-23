@@ -6787,6 +6787,15 @@
     "opacityFor": "ความทึบของ {{name}}",
     "opacityValueInputAria": "ค่าของ{{label}}",
     "opacityValueEditAria": "แก้ไขค่าของ{{label}}",
+    "blendMode": "การผสม",
+    "blendModeFor": "โหมดการผสมของ{{name}}",
+    "blendModes": {
+      "normal": "ปกติ",
+      "multiply": "คูณ",
+      "screen": "สกรีน",
+      "lighten": "ทำให้สว่าง",
+      "add": "บวก"
+    },
     "basemapOpacity": "ความทึบของแผนที่ฐาน",
     "newGroup": "กลุ่มใหม่",
     "basemaps": "แผนที่ฐาน",

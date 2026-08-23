@@ -6864,6 +6864,15 @@
     "opacityFor": "Opacità per {{name}}",
     "opacityValueInputAria": "Valore di {{label}}",
     "opacityValueEditAria": "Modifica valore di {{label}}",
+    "blendMode": "Fusione",
+    "blendModeFor": "Modalità di fusione di {{name}}",
+    "blendModes": {
+      "normal": "Normale",
+      "multiply": "Moltiplica",
+      "screen": "Scolora",
+      "lighten": "Schiarisci",
+      "add": "Aggiungi"
+    },
     "basemapOpacity": "Opacità mappa di base",
     "newGroup": "Nuovo gruppo",
     "basemaps": "Mappe di base",

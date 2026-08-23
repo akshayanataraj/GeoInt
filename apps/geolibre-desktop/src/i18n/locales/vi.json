@@ -6787,6 +6787,15 @@
     "opacityFor": "Độ trong suốt của {{name}}",
     "opacityValueInputAria": "Độ trong suốt {{label}}",
     "opacityValueEditAria": "Chỉnh sửa giá trị {{label}}",
+    "blendMode": "Hòa trộn",
+    "blendModeFor": "Chế độ hòa trộn cho {{name}}",
+    "blendModes": {
+      "normal": "Bình thường",
+      "multiply": "Nhân",
+      "screen": "Màn hình",
+      "lighten": "Làm sáng",
+      "add": "Cộng"
+    },
     "basemapOpacity": "Độ mờ của bản đồ cơ sở",
     "newGroup": "Nhóm mới",
     "basemaps": "Bản đồ nền",

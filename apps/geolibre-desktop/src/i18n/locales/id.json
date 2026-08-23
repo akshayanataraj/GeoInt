@@ -6787,6 +6787,15 @@
     "opacityFor": "Opasitas untuk {{name}}",
     "opacityValueInputAria": "Nilai {{label}}",
     "opacityValueEditAria": "Edit nilai {{label}}",
+    "blendMode": "Pembauran",
+    "blendModeFor": "Mode pembauran untuk {{name}}",
+    "blendModes": {
+      "normal": "Normal",
+      "multiply": "Perkalian",
+      "screen": "Layar",
+      "lighten": "Terangkan",
+      "add": "Tambah"
+    },
     "basemapOpacity": "Opasitas peta dasar",
     "newGroup": "Grup baru",
     "basemaps": "Peta dasar",

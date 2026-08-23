@@ -6864,6 +6864,15 @@
     "opacityFor": "Deckkraft für {{name}}",
     "opacityValueInputAria": "{{label}}-Wert",
     "opacityValueEditAria": "{{label}}-Wert bearbeiten",
+    "blendMode": "Mischen",
+    "blendModeFor": "Mischmodus für {{name}}",
+    "blendModes": {
+      "normal": "Normal",
+      "multiply": "Multiplizieren",
+      "screen": "Negativ multiplizieren",
+      "lighten": "Aufhellen",
+      "add": "Addieren"
+    },
     "basemapOpacity": "Deckkraft der Basiskarte",
     "newGroup": "Neue Gruppe",
     "basemaps": "Basiskarten",

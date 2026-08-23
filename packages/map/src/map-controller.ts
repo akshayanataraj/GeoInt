@@ -51,6 +51,7 @@ import {
   vectorTileStyleLayerIds,
 } from "./layer-sync";
 import { globeSafeMaxZoom } from "./globe-fit-bounds";
+import { installLayerBlendModes, syncLayerBlendModes } from "./layer-blend-modes";
 import { ensureGeneratedImageHandler } from "./generated-images";
 import { installGlobePopupOcclusion } from "./globe-popup-occlusion";
 import { isMapboxStyleUrl, loadMapboxStyle, redactMapboxStyleUrl } from "./mapbox-style";
@@ -572,6 +573,10 @@ export class MapController {
     });
     ensureGeneratedImageHandler(this.map);
     installGlobePopupOcclusion(maplibregl);
+    // Per-layer blend modes wrap MapLibre's render loop, so they have to be in
+    // place before the first frame. Feature-detected: an unsupported build
+    // leaves the map untouched and the Style panel hides the control.
+    installLayerBlendModes(this.map);
     // The constructor options above already apply the static constraints.
     // The transform constraint is installed by the MapCanvas effect that
     // fires on mount, so calling applyMapPreferences here would only add a
@@ -1247,6 +1252,10 @@ export class MapController {
     }
     this.layerIds = nextIds;
     this.syncedLayers = layers;
+    // Blend modes are read inside the render loop rather than from a paint
+    // property, so a mode that changed without any other paint change still
+    // needs a frame asking for it.
+    if (syncLayerBlendModes(layers)) map.triggerRepaint();
     this.applyBasemapVisibility();
     this.applyBasemapOpacity();
     this.publishLayerDisplayNames(layers);
