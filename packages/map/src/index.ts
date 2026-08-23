@@ -64,6 +64,7 @@ export {
   isBlending,
   layerBlendModesSupported,
   resetLayerBlendModes,
+  subscribeLayerBlendModeSupport,
   syncLayerBlendModes,
   type BlendConstants,
   type BlendSpec,

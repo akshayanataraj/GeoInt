@@ -398,6 +398,15 @@ export const BLEND_MODES = ["normal", "multiply", "screen", "lighten", "add"] as
  */
 export type BlendMode = (typeof BLEND_MODES)[number];
 
+/**
+ * The mode a layer renders with unless it says otherwise. Declared separately
+ * from {@link DEFAULT_LAYER_STYLE} so consumers get a non-optional
+ * {@link BlendMode} to fall back to: `blendMode` is optional on
+ * {@link LayerStyle}, so `DEFAULT_LAYER_STYLE.blendMode` is typed
+ * `BlendMode | undefined` however it is initialized.
+ */
+export const DEFAULT_BLEND_MODE: BlendMode = "normal";
+
 export interface LayerStyle {
   minZoom: number;
   maxZoom: number;
@@ -723,7 +732,7 @@ export const DEFAULT_LAYER_STYLE: LayerStyle = {
   rasterSaturation: 0,
   rasterContrast: 0,
   rasterHueRotate: 0,
-  blendMode: "normal",
+  blendMode: DEFAULT_BLEND_MODE,
 };
 
 /**

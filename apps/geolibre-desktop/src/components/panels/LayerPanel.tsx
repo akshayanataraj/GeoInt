@@ -27,7 +27,7 @@ import {
   createLayerLibraryEntryId,
   copyableLayerStyleKind,
   BLEND_MODES,
-  DEFAULT_LAYER_STYLE,
+  DEFAULT_BLEND_MODE,
   pluginOwnsPaint,
   supportsBridgedOpacity,
   useAppStore,
@@ -76,6 +76,7 @@ import {
   isPlaceholderLayer,
   layerBlendModesSupported,
   mapboxStyleToJson,
+  subscribeLayerBlendModeSupport,
   geoLibreStyleSourceName,
   parseMapboxStyle,
   parseQml,
@@ -737,6 +738,15 @@ export function LayerPanel({
   const setLayerVisibility = useAppStore((s) => s.setLayerVisibility);
   const setLayerOpacity = useAppStore((s) => s.setLayerOpacity);
   const setLayerStyle = useAppStore((s) => s.setLayerStyle);
+  // Support is decided when the map installs the blend wrappers, which can
+  // happen after this panel first renders, so subscribe rather than reading the
+  // module state once: otherwise a build that moved a MapLibre render seam
+  // would keep offering a control that can only save a mode nothing applies.
+  const blendModesSupported = useSyncExternalStore(
+    subscribeLayerBlendModeSupport,
+    layerBlendModesSupported,
+    layerBlendModesSupported,
+  );
   const reorderLayer = useAppStore((s) => s.reorderLayer);
   const moveLayer = useAppStore((s) => s.moveLayer);
   const moveLayersRelative = useAppStore((s) => s.moveLayersRelative);
@@ -3541,11 +3551,11 @@ export function LayerPanel({
                         plugin-painted layer (its own WebGL custom layer, drawn
                         outside that loop) cannot honour it — same reason the
                         opacity slider is bridged rather than direct (#1445). */}
-                    {!pluginOwnsPaint(layer) && layerBlendModesSupported() && (
+                    {!pluginOwnsPaint(layer) && blendModesSupported && (
                       <LayerBlendModeSelect
                         layerId={layer.id}
                         layerName={layer.name}
-                        value={layer.style.blendMode ?? DEFAULT_LAYER_STYLE.blendMode ?? "normal"}
+                        value={layer.style.blendMode ?? DEFAULT_BLEND_MODE}
                         onChange={(mode) => setLayerStyle(layer.id, { blendMode: mode })}
                       />
                     )}

@@ -275,29 +275,49 @@ describe("the maplibre-gl render-seam mirror", () => {
     );
   });
 
+  it("has a layer-level composite for fill and line only", () => {
+    // `COMPOSITE_LAYER_TYPES` mirrors this set. Circle and fill-extrusion
+    // layers consequently blend per symbol, so overlapping points or adjacent
+    // extruded buildings darken twice under Multiply -- a documented MapLibre
+    // limitation (see the module comment and docs/user-guide/layers.md), not a
+    // choice. If a future maplibre-gl adds `circle-layer-opacity` or
+    // `fill-extrusion-layer-opacity`, this fails and the caveat can be lifted.
+    const withComposite = Object.keys(v8)
+      .filter((key) => key.startsWith("paint_"))
+      .filter((key) =>
+        Object.keys(v8[key as keyof typeof v8] as object).some((property) =>
+          property.endsWith("-layer-opacity"),
+        ),
+      )
+      .sort();
+    assert.deepEqual(withComposite, ["paint_fill", "paint_line"]);
+  });
+
   it("still ships the painter and context methods the wrappers replace", () => {
     // The classes are module-private and need a live WebGL context to build,
     // which node has none of, so the shipped bundle is read directly. Minified
     // output preserves method names, so a rename shows up here.
     const require = createRequire(import.meta.url);
     const bundle = readFileSync(require.resolve("maplibre-gl/dist/maplibre-gl.mjs"), "utf8");
+    // Matched in definition or call position (`name(`, `name=`, `name:`) rather
+    // than as a bare substring: names like `blendFunc` occur incidentally all
+    // over a bundle this size, so a plain `includes` would still pass after the
+    // method the wrappers replace had been renamed away.
     for (const seam of [
       "renderLayer",
       "useProgram",
       "setColorMode",
       "blendFunc",
       "blendEquation",
+      // The program the render-to-texture composite is drawn with, which is how
+      // the wrapper tells the composite from the draws feeding it.
+      "layerOpacity",
     ]) {
-      assert.ok(
-        bundle.includes(seam),
-        `maplibre-gl no longer mentions "${seam}"; packages/map/src/layer-blend-modes.ts needs revisiting`,
+      assert.match(
+        bundle,
+        new RegExp(`\\b${seam}\\s*[(=:]`),
+        `maplibre-gl no longer defines "${seam}"; packages/map/src/layer-blend-modes.ts needs revisiting`,
       );
     }
-    // The program name the render-to-texture composite is drawn with, which is
-    // how the wrapper tells the composite from the draws feeding it.
-    assert.ok(
-      bundle.includes("layerOpacity"),
-      'maplibre-gl no longer names its "layerOpacity" composite program',
-    );
   });
 });

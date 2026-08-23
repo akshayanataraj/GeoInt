@@ -31,9 +31,18 @@
  * the program MapLibre asked for -- leaving the draws *into* the scratch buffer
  * on ordinary alpha blending.
  *
- * Every other layer type (raster above all, the case #1981 was filed for)
- * has no such composite pass and blends per draw, which is equivalent for
- * raster tiles because they do not overlap within a layer.
+ * Every other layer type has no such composite pass and blends per draw. For
+ * raster -- the case #1981 was filed for -- that is equivalent, because tiles
+ * do not overlap within a layer. For `circle` and `fill-extrusion` it is NOT:
+ * symbols that overlap on screen blend against each other as well as against
+ * the map, so an overlap darkens twice under Multiply (measured at
+ * `rgb(23, 77, 220)` in the overlap against `rgb(76, 136, 222)` on a single
+ * symbol, where ordinary alpha compositing differs by a fraction of that).
+ * This is a MapLibre limitation, not a choice: `fill-layer-opacity` and
+ * `line-layer-opacity` are the only layer-level composites the style spec
+ * defines, so there is nothing to elect for the other types. The control is
+ * still offered for them -- blending sparse points over a hillshade is a real
+ * use -- and `docs/user-guide/layers.md` documents the overlap caveat.
  *
  * All three internals are unexported, so `tests/layer-blend-modes.test.ts`
  * asserts their shape against a real `maplibre-gl` build and fails on a bump
@@ -268,21 +277,51 @@ let active: { spec: BlendSpec; compositeOnly: boolean } | null = null;
 let lastProgram: string | null = null;
 /** `null` until a map has been installed and the seams actually probed. */
 let supported: boolean | null = null;
+const supportListeners = new Set<() => void>();
 
 /**
  * Whether the running `maplibre-gl` exposed every seam blending needs.
  *
  * Optimistic before the first {@link installLayerBlendModes} call, so a panel
  * that renders while the map is still initializing offers the control rather
- * than hiding it and never re-rendering once the answer is known.
+ * than hiding it. The answer can therefore change once, from optimistic `true`
+ * to `false`, when the map installs against a build that moved a seam --
+ * subscribe with {@link subscribeLayerBlendModeSupport} to re-render on that.
  */
 export function layerBlendModesSupported(): boolean {
   return supported !== false;
 }
 
 /**
- * MapLibre renders a fill or line layer through its scratch-framebuffer
- * composite (see the module comment); only that final draw carries the mode.
+ * Subscribe to changes in {@link layerBlendModesSupported}, for
+ * `useSyncExternalStore`. Returns the unsubscribe function.
+ *
+ * Without this a panel rendered before the map installed would keep offering a
+ * Blend control that cannot do anything, and would let a mode be saved into the
+ * project that nothing will ever apply.
+ */
+export function subscribeLayerBlendModeSupport(listener: () => void): () => void {
+  supportListeners.add(listener);
+  return () => {
+    supportListeners.delete(listener);
+  };
+}
+
+function setSupported(next: boolean): void {
+  if (supported === next) return;
+  supported = next;
+  for (const listener of supportListeners) listener();
+}
+
+/**
+ * The layer types MapLibre can render through its scratch-framebuffer composite
+ * (see the module comment); for those, only the final draw carries the mode.
+ *
+ * Exactly the types the style spec gives a `*-layer-opacity` paint property --
+ * `fill` and `line`, and no others as of maplibre-gl 6.3. Adding a type here
+ * without a corresponding `*-layer-opacity` in `style-mapper` would silently
+ * disable blending for it, because the composite draw it waits for never comes.
+ * `tests/layer-blend-modes.test.ts` checks this set against the style spec.
  */
 const COMPOSITE_LAYER_TYPES = new Set(["fill", "line"]);
 /** The program name MapLibre composites a layer-opacity render-to-texture with. */
@@ -322,10 +361,10 @@ export function installLayerBlendModes(map: maplibregl.Map): boolean {
     console.warn(
       "[geolibre] per-layer blend modes disabled: this maplibre-gl build does not expose the expected render seams",
     );
-    supported = false;
+    setSupported(false);
     return false;
   }
-  supported = true;
+  setSupported(true);
   if (painterProto[PATCHED] && contextProto[PATCHED]) return true;
 
   const gl = context.gl;

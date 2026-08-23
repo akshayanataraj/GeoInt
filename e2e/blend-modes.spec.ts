@@ -46,6 +46,26 @@ async function samplePixel(page: Page, fx: number, fy: number): Promise<number[]
 
 const luminance = ([r, g, b]: number[]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
+/**
+ * The centre pixel once the map has stopped changing.
+ *
+ * A blend mode never reaches a paint property, so there is no style event to
+ * await: the only signal that the new mode has reached the GPU is the pixel
+ * itself settling. Polling until two consecutive reads agree is what keeps a
+ * sample from being taken mid-transition (or from the previous mode's frame),
+ * without a fixed timeout that is both slower and less reliable on CI.
+ */
+async function settledPixel(page: Page): Promise<number[]> {
+  let previous = await samplePixel(page, 0.5, 0.5);
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    await page.waitForTimeout(250);
+    const current = await samplePixel(page, 0.5, 0.5);
+    if (current.every((channel, index) => channel === previous[index])) return current;
+    previous = current;
+  }
+  return previous;
+}
+
 test("blends a vector layer against the map beneath it", async ({ page }) => {
   await waitForMap(page);
   await dropGeoJson(page, "blendtest", POLYGON);
@@ -55,31 +75,29 @@ test("blends a vector layer against the map beneath it", async ({ page }) => {
   await expect(select).toBeVisible();
 
   // Let the basemap tiles settle so the backdrop being blended into is stable.
-  await page.waitForTimeout(3000);
-  const normal = await samplePixel(page, 0.5, 0.5);
+  const normal = await settledPixel(page);
   expect(normal[3]).toBe(255);
 
   await select.selectOption("multiply");
   await expect
-    .poll(async () => luminance(await samplePixel(page, 0.5, 0.5)), { timeout: 15_000 })
+    .poll(async () => luminance(await settledPixel(page)), { timeout: 15_000 })
     .toBeLessThan(luminance(normal));
 
   await select.selectOption("screen");
   await expect
-    .poll(async () => luminance(await samplePixel(page, 0.5, 0.5)), { timeout: 15_000 })
+    .poll(async () => luminance(await settledPixel(page)), { timeout: 15_000 })
     .toBeGreaterThan(luminance(normal));
 
   // Clearing the mode has to restore the layer exactly: `fill-layer-opacity` is
   // set to elect MapLibre's composite path and must be written back to 1.
   await select.selectOption("normal");
-  await expect.poll(async () => samplePixel(page, 0.5, 0.5), { timeout: 15_000 }).toEqual(normal);
+  await expect.poll(async () => settledPixel(page), { timeout: 15_000 }).toEqual(normal);
 });
 
 test("keeps the canvas opaque and the uncovered map intact in every mode", async ({ page }) => {
   await waitForMap(page);
   await dropGeoJson(page, "blendtest", POLYGON);
   await expect(layerRow(page, "blendtest")).toBeVisible();
-  await page.waitForTimeout(3000);
 
   const select = layerRow(page, "blendtest").getByLabel("Blend mode for blendtest");
   const modes = await select
@@ -90,10 +108,22 @@ test("keeps the canvas opaque and the uncovered map intact in every mode", async
   expect(modes).not.toContain("darken");
   expect(modes).not.toContain("subtract");
 
+  const baseline = await settledPixel(page);
+  expect(baseline[3]).toBe(255);
+
   for (const mode of modes) {
     await select.selectOption(mode);
-    await page.waitForTimeout(1200);
-    const centre = await samplePixel(page, 0.5, 0.5);
+    const centre = await settledPixel(page);
+    // Alpha alone would prove nothing: the canvas is already opaque before a
+    // mode is applied, so the assertion would pass on a frame the mode had not
+    // reached yet. Requiring a colour change first pins that it actually took.
+    if (mode !== "normal") {
+      expect(centre.slice(0, 3), `${mode} did not change the rendered colour`).not.toEqual(
+        baseline.slice(0, 3),
+      );
+    } else {
+      expect(centre, "normal did not restore the unblended pixel").toEqual(baseline);
+    }
     expect(centre[3], `${mode} left the canvas translucent`).toBe(255);
   }
 });

@@ -34,6 +34,18 @@ Blending applies to a layer's fills, outlines, points, markers, and raster
 tiles. **Labels are deliberately excluded** and always draw normally, so place
 names stay legible over a multiplied hillshade.
 
+!!! warning "Overlapping points and 3D buildings blend twice"
+
+    Polygons, lines, and raster tiles blend as a whole layer: two overlapping
+    polygons in the same layer combine with the map beneath them, not with each
+    other. Points and 3D extrusions cannot, because MapLibre provides no
+    layer-level compositing step for them, so each symbol blends separately.
+    Where two point symbols overlap on screen the overlap is blended twice and
+    reads noticeably darker under Multiply than the rest of the symbol.
+
+    If that shows in your map, reduce the overlap (a smaller radius, clustering,
+    or a scale-dependent minimum zoom), or convert the points to polygons.
+
 A blend mode is saved with the project and travels with a copied style, but it
 is a GeoLibre rendering setting with no equivalent in the MapLibre or Mapbox
 style specification, so it is dropped when you export a layer's style to a style
