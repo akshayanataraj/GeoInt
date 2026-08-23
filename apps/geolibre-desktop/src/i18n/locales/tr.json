@@ -6257,6 +6257,15 @@
     "addClass": "Sınıf ekle",
     "removeClass": "Sınıfı kaldır",
     "beforeIdSavedUnavailable": "Kaydedildi (kullanılamıyor)",
+    "blendMode": "Karışım",
+    "blendModeFor": "{{name}} için karışım modu",
+    "blendModes": {
+      "normal": "Normal",
+      "multiply": "Çarpma",
+      "screen": "Ekran",
+      "lighten": "Açıklaştır",
+      "add": "Toplama"
+    },
     "raster": {
       "greyscale": "Gri tonlama",
       "greyscaleHint": "Bir gri tonlamalı temel haritayı aç/kapat (doygunluğu minimuma indirir)",
@@ -6864,15 +6873,6 @@
     "opacityFor": "{{name}} için opaklık",
     "opacityValueInputAria": "{{label}} değeri",
     "opacityValueEditAria": "{{label}} değerini düzenle",
-    "blendMode": "Karışım",
-    "blendModeFor": "{{name}} için karışım modu",
-    "blendModes": {
-      "normal": "Normal",
-      "multiply": "Çarpma",
-      "screen": "Ekran",
-      "lighten": "Açıklaştır",
-      "add": "Toplama"
-    },
     "basemapOpacity": "Temel harita opaklığı",
     "newGroup": "Yeni grup",
     "basemaps": "Temel haritalar",

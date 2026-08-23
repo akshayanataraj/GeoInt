@@ -9,13 +9,13 @@ The **Layers panel** on the left lists every layer in the project, from the topm
 - **Visibility**: click the eye button to show or hide a layer. The **Hide all layers** button at the top of the panel hides every layer at once.
 - **Order**: drag a layer to reorder it, or use the move up and move down actions. Layers higher in the list draw on top. The basemap (**Background**) always stays at the bottom.
 - **Opacity**: each layer has an opacity slider from 0 to 100 percent.
-- **Blend**: how the layer combines with whatever is drawn beneath it (see below).
 
 ## Blend modes
 
-Beside the opacity slider, each layer has a **Blend** menu that controls how its
-colours combine with the map below it. Opacity dilutes a layer; a blend mode
-mixes it, so the layers underneath still read through at full saturation.
+The [Style panel](styling.md) carries a **Blend** menu, above the symbology
+controls, that sets how a layer's colours combine with the map below it.
+Opacity dilutes a layer; a blend mode mixes it, so the layers underneath still
+read through at full saturation.
 
 The classic use is shading: put a hillshade, a terrain raster, or a dark
 basemap under a thematic fill or an aerial image, set the top layer to

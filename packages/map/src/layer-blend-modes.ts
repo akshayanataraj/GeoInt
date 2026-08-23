@@ -51,7 +51,12 @@
  * if one is missing.
  */
 import type * as maplibregl from "maplibre-gl";
-import { DEFAULT_LAYER_STYLE, type BlendMode, type GeoLibreLayer } from "@geolibre/core";
+import {
+  DEFAULT_BLEND_MODE,
+  DEFAULT_LAYER_STYLE,
+  type BlendMode,
+  type GeoLibreLayer,
+} from "@geolibre/core";
 
 /**
  * The `fill-layer-opacity` / `line-layer-opacity` value a blended fill or line
@@ -217,6 +222,28 @@ function exactNativeLayerIds(layer: GeoLibreLayer): string[] {
   // Single-native-layer types (raster, xyz, wms, wmts, video, image, …) render
   // into a style layer named for the store layer itself.
   return ids.length > 0 ? ids : [layer.id];
+}
+
+/**
+ * A compact fingerprint of which layers blend and with what.
+ *
+ * {@link syncLayerBlendModes} reports whether the *global* registry changed,
+ * which cannot drive a repaint on its own: the registry is module-level and
+ * shared by every `MapController`, so in a split view the first pane to sync
+ * wins the diff and every other pane is told nothing changed. Each controller
+ * therefore compares this signature against its own previous one, so all panes
+ * repaint for a mode that changes no paint property (raster, circle,
+ * fill-extrusion), and all of them repaint when the last mode is cleared.
+ */
+export function blendModeSignature(layers: readonly GeoLibreLayer[]): string {
+  // Only the blending layers appear, so a map where nothing blends has the same
+  // (empty) signature before and after every sync and never asks for a frame it
+  // does not need. Clearing the last mode still changes the signature to empty
+  // from non-empty, which is the repaint that restores the layer.
+  return layers
+    .filter((layer) => isBlending(layer.style?.blendMode ?? DEFAULT_BLEND_MODE))
+    .map((layer) => `${layer.id}:${layer.style?.blendMode}`)
+    .join("|");
 }
 
 /**
@@ -429,7 +456,7 @@ export function installLayerBlendModes(map: maplibregl.Map): boolean {
     typeof context.blendFunc?.set === "function" &&
     typeof context.blendEquation?.set === "function";
   if (!seamsPresent) {
-    // A maplibre-gl bump moved something. Blending stays off (the Layers panel
+    // A maplibre-gl bump moved something. Blending stays off (the Style panel
     // reads `layerBlendModesSupported`), and the map renders exactly as before.
     console.warn(
       "[geolibre] per-layer blend modes disabled: this maplibre-gl build does not expose the expected render seams",

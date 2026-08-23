@@ -6257,6 +6257,15 @@
     "addClass": "Adicionar classe",
     "removeClass": "Remover classe",
     "beforeIdSavedUnavailable": "Salvo (indisponível)",
+    "blendMode": "Mesclagem",
+    "blendModeFor": "Modo de mesclagem de {{name}}",
+    "blendModes": {
+      "normal": "Normal",
+      "multiply": "Multiplicar",
+      "screen": "Tela",
+      "lighten": "Clarear",
+      "add": "Adicionar"
+    },
     "raster": {
       "greyscale": "Escala de cinza",
       "greyscaleHint": "Alternar um mapa base em escala de cinza (leva a saturação ao mínimo)",
@@ -6864,15 +6873,6 @@
     "opacityFor": "Opacidade de {{name}}",
     "opacityValueInputAria": "Valor de {{label}}",
     "opacityValueEditAria": "Editar valor de {{label}}",
-    "blendMode": "Mesclagem",
-    "blendModeFor": "Modo de mesclagem de {{name}}",
-    "blendModes": {
-      "normal": "Normal",
-      "multiply": "Multiplicar",
-      "screen": "Tela",
-      "lighten": "Clarear",
-      "add": "Adicionar"
-    },
     "basemapOpacity": "Opacidade do mapa base",
     "newGroup": "Novo grupo",
     "basemaps": "Mapas base",

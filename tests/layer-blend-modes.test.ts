@@ -15,6 +15,7 @@ import {
   blendModeForNativeLayer,
   blendSpecFor,
   isBlending,
+  blendModeSignature,
   resetLayerBlendModes,
   syncLayerBlendModes,
   type BlendConstants,
@@ -288,6 +289,42 @@ describe("the native style-layer registry", () => {
     ]);
     syncLayerBlendModes([]);
     assert.equal(blendModeForNativeLayer("layer-abc-fill"), null);
+  });
+});
+
+describe("the per-pane repaint signal", () => {
+  // `syncLayerBlendModes` reports whether the SHARED registry changed, which
+  // cannot drive a repaint: it is module-level, so with a split view open the
+  // first pane to sync wins the diff and every other pane is told nothing
+  // changed. A mode on a layer type with no composite (raster, circle,
+  // fill-extrusion) changes no paint property either, so those panes would keep
+  // rendering the old mode. Each controller compares this signature instead.
+  it("changes when a mode is set, changed, or cleared", () => {
+    const plain = layer("a");
+    const multiply = layer("a", { style: { ...DEFAULT_LAYER_STYLE, blendMode: "multiply" } });
+    const screen = layer("a", { style: { ...DEFAULT_LAYER_STYLE, blendMode: "screen" } });
+    assert.notEqual(blendModeSignature([multiply]), blendModeSignature([plain]));
+    assert.notEqual(blendModeSignature([multiply]), blendModeSignature([screen]));
+    // Clearing the last mode has to be visible too, or the layer would keep
+    // rendering blended until something unrelated forced a redraw.
+    assert.notEqual(blendModeSignature([plain]), blendModeSignature([multiply]));
+  });
+
+  it("is identical for every pane given the same layers", () => {
+    // The panes sync the same store layers, so they agree on the signature and
+    // all of them repaint -- unlike the shared-registry diff, which only the
+    // first pane to run ever sees as changed.
+    const layers = [layer("a", { style: { ...DEFAULT_LAYER_STYLE, blendMode: "multiply" } })];
+    assert.equal(blendModeSignature(layers), blendModeSignature([...layers]));
+    assert.equal(syncLayerBlendModes(layers), true);
+    // Second pane: the registry now matches, so the shared diff says "no
+    // change" while the signature still tells the pane to repaint.
+    assert.equal(syncLayerBlendModes(layers), false);
+    assert.notEqual(blendModeSignature(layers), "");
+  });
+
+  it("stays empty while nothing blends, so a plain map asks for no frames", () => {
+    assert.equal(blendModeSignature([layer("a"), layer("b")]), "");
   });
 });
 

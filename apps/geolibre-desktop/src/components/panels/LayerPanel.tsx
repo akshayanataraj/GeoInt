@@ -26,9 +26,6 @@ import {
   captureLayerLibraryEntry,
   createLayerLibraryEntryId,
   copyableLayerStyleKind,
-  BLEND_MODES,
-  DEFAULT_BLEND_MODE,
-  controlRendersLayer,
   pluginOwnsPaint,
   supportsBridgedOpacity,
   useAppStore,
@@ -38,7 +35,7 @@ import {
   layerPanelGroupHeaders,
   resolveLayerCapabilities,
 } from "@geolibre/core";
-import type { BlendMode, EllipsoidId, GeoLibreLayer, LayerGroup } from "@geolibre/core";
+import type { EllipsoidId, GeoLibreLayer, LayerGroup } from "@geolibre/core";
 import type { FeatureCollection } from "geojson";
 import {
   buildTimeBindingFromRecords,
@@ -75,9 +72,7 @@ import {
   buildQml,
   buildSld,
   isPlaceholderLayer,
-  layerBlendModesSupported,
   mapboxStyleToJson,
-  subscribeLayerBlendModeSupport,
   geoLibreStyleSourceName,
   parseMapboxStyle,
   parseQml,
@@ -565,50 +560,6 @@ function LayerOpacitySlider({ label, ariaLabel, value, onChange }: LayerOpacityS
   );
 }
 
-interface LayerBlendModeSelectProps {
-  layerId: string;
-  layerName: string;
-  value: BlendMode;
-  onChange: (mode: BlendMode) => void;
-}
-
-/**
- * How a layer composites onto the map beneath it, beside its opacity because
- * the two answer the same question: opacity dilutes a layer's colour, a blend
- * mode combines it. The classic pairing is a thematic fill or an aerial image
- * over a hillshade set to Multiply, so the relief still reads through at full
- * saturation.
- */
-function LayerBlendModeSelect({ layerId, layerName, value, onChange }: LayerBlendModeSelectProps) {
-  const { t } = useTranslation();
-  const selectId = `blend-mode-${layerId}`;
-  return (
-    <div className="mt-2 flex items-center gap-1">
-      {/* A real label rather than a span (the opacity slider's neighbour above
-          drives a Slider, which has no focusable control an htmlFor could
-          target): clicking the word focuses the menu, and it puts `selectId` to
-          use instead of leaving it unreferenced. */}
-      <label className="text-[10px] text-muted-foreground" htmlFor={selectId}>
-        {t("layers.blendMode")}
-      </label>
-      <Select
-        id={selectId}
-        className="flex-1"
-        aria-label={t("layers.blendModeFor", { name: layerName })}
-        value={value}
-        onClick={(e: ReactMouseEvent) => e.stopPropagation()}
-        onChange={(event) => onChange(event.target.value as BlendMode)}
-      >
-        {BLEND_MODES.map((mode) => (
-          <option key={mode} value={mode}>
-            {t(`layers.blendModes.${mode}` as ParseKeys)}
-          </option>
-        ))}
-      </Select>
-    </div>
-  );
-}
-
 function refreshIntervalOptionValue(intervalMs: number): string {
   if (REFRESH_INTERVAL_OPTIONS.some((option) => option.intervalMs === intervalMs)) {
     return String(intervalMs);
@@ -743,15 +694,6 @@ export function LayerPanel({
   const setLayerVisibility = useAppStore((s) => s.setLayerVisibility);
   const setLayerOpacity = useAppStore((s) => s.setLayerOpacity);
   const setLayerStyle = useAppStore((s) => s.setLayerStyle);
-  // Support is decided when the map installs the blend wrappers, which can
-  // happen after this panel first renders, so subscribe rather than reading the
-  // module state once: otherwise a build that moved a MapLibre render seam
-  // would keep offering a control that can only save a mode nothing applies.
-  const blendModesSupported = useSyncExternalStore(
-    subscribeLayerBlendModeSupport,
-    layerBlendModesSupported,
-    layerBlendModesSupported,
-  );
   const reorderLayer = useAppStore((s) => s.reorderLayer);
   const moveLayer = useAppStore((s) => s.moveLayer);
   const moveLayersRelative = useAppStore((s) => s.moveLayersRelative);
@@ -3552,28 +3494,6 @@ export function LayerPanel({
                         onChange={(v) => setLayerOpacity(layer.id, v)}
                       />
                     )}
-                    {/* Blending is applied inside MapLibre's render loop, so a
-                        layer drawn outside it cannot honour the mode — the same
-                        reason the opacity slider is bridged rather than direct
-                        (#1445). Two independent marks: `paintMode` for a plugin
-                        that paints GeoLibre's own style layers itself, and
-                        `customLayerType` for a control that renders its layers
-                        itself (3D Tiles, Gaussian splats, LiDAR, the COG
-                        raster engine, and Add Vector Layer, which paints its
-                        own native fill/line layers so GeoLibre never applies
-                        the `fill-layer-opacity` that elects the composite
-                        path). Plain XYZ/WMS rasters and external-native
-                        PMTiles/MBTiles layers set neither, and do blend. */}
-                    {!pluginOwnsPaint(layer) &&
-                      !controlRendersLayer(layer) &&
-                      blendModesSupported && (
-                        <LayerBlendModeSelect
-                          layerId={layer.id}
-                          layerName={layer.name}
-                          value={layer.style.blendMode ?? DEFAULT_BLEND_MODE}
-                          onChange={(mode) => setLayerStyle(layer.id, { blendMode: mode })}
-                        />
-                      )}
                     <div className="mt-2 flex flex-wrap gap-1">
                       <Button
                         variant="ghost"

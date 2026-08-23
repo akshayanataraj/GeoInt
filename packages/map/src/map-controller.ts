@@ -51,7 +51,11 @@ import {
   vectorTileStyleLayerIds,
 } from "./layer-sync";
 import { globeSafeMaxZoom } from "./globe-fit-bounds";
-import { installLayerBlendModes, syncLayerBlendModes } from "./layer-blend-modes";
+import {
+  blendModeSignature,
+  installLayerBlendModes,
+  syncLayerBlendModes,
+} from "./layer-blend-modes";
 import { ensureGeneratedImageHandler } from "./generated-images";
 import { installGlobePopupOcclusion } from "./globe-popup-occlusion";
 import { isMapboxStyleUrl, loadMapboxStyle, redactMapboxStyleUrl } from "./mapbox-style";
@@ -509,6 +513,8 @@ export class MapController {
   private basemapOriginalPaintValues = new Map<string, Map<string, unknown>>();
   private syncedLayers: GeoLibreLayer[] = [];
   private layerIds: string[] = [];
+  /** This pane's last blend-mode fingerprint; see `blendModeSignature`. */
+  private blendSignature = "";
   private styleReady = false;
   private controlVisibility: Record<BuiltInMapControl, boolean> = {
     ...DEFAULT_BUILT_IN_CONTROL_VISIBILITY,
@@ -1260,8 +1266,17 @@ export class MapController {
     this.syncedLayers = layers;
     // Blend modes are read inside the render loop rather than from a paint
     // property, so a mode that changed without any other paint change still
-    // needs a frame asking for it.
-    if (syncLayerBlendModes(layers)) map.triggerRepaint();
+    // needs a frame asking for it. The repaint is gated on THIS controller's
+    // own view of the modes, not on whether the shared registry changed: the
+    // registry is module-level, so in a split view the first pane to sync would
+    // otherwise win the diff and leave the other panes on the previous mode
+    // until an unrelated event forced them to redraw.
+    syncLayerBlendModes(layers);
+    const blendSignature = blendModeSignature(layers);
+    if (blendSignature !== this.blendSignature) {
+      this.blendSignature = blendSignature;
+      map.triggerRepaint();
+    }
     this.applyBasemapVisibility();
     this.applyBasemapOpacity();
     this.publishLayerDisplayNames(layers);

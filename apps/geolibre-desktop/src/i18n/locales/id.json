@@ -6183,6 +6183,15 @@
     "addClass": "Tambah kelas",
     "removeClass": "Hapus kelas",
     "beforeIdSavedUnavailable": "Tersimpan (tidak tersedia)",
+    "blendMode": "Pembauran",
+    "blendModeFor": "Mode pembauran untuk {{name}}",
+    "blendModes": {
+      "normal": "Normal",
+      "multiply": "Perkalian",
+      "screen": "Layar",
+      "lighten": "Terangkan",
+      "add": "Tambah"
+    },
     "raster": {
       "greyscale": "Skala abu-abu",
       "greyscaleHint": "Alihkan peta dasar skala abu-abu (menurunkan saturasi ke minimum)",
@@ -6787,15 +6796,6 @@
     "opacityFor": "Opasitas untuk {{name}}",
     "opacityValueInputAria": "Nilai {{label}}",
     "opacityValueEditAria": "Edit nilai {{label}}",
-    "blendMode": "Pembauran",
-    "blendModeFor": "Mode pembauran untuk {{name}}",
-    "blendModes": {
-      "normal": "Normal",
-      "multiply": "Perkalian",
-      "screen": "Layar",
-      "lighten": "Terangkan",
-      "add": "Tambah"
-    },
     "basemapOpacity": "Opasitas peta dasar",
     "newGroup": "Grup baru",
     "basemaps": "Peta dasar",

@@ -6552,6 +6552,15 @@
     "addClass": "إضافة فئة",
     "removeClass": "إزالة فئة",
     "beforeIdSavedUnavailable": "محفوظ (غير متاح)",
+    "blendMode": "المزج",
+    "blendModeFor": "وضع المزج لـ {{name}}",
+    "blendModes": {
+      "normal": "عادي",
+      "multiply": "ضرب",
+      "screen": "شاشة",
+      "lighten": "تفتيح",
+      "add": "إضافة"
+    },
     "raster": {
       "greyscale": "تدرج رمادي",
       "greyscaleHint": "تبديل خريطة الأساس إلى تدرج رمادي (يخفض التشبع إلى حده الأدنى)",
@@ -7171,15 +7180,6 @@
     "opacityFor": "عتامة {{name}}",
     "opacityValueInputAria": "قيمة {{label}}",
     "opacityValueEditAria": "تحرير قيمة {{label}}",
-    "blendMode": "المزج",
-    "blendModeFor": "وضع المزج لـ {{name}}",
-    "blendModes": {
-      "normal": "عادي",
-      "multiply": "ضرب",
-      "screen": "شاشة",
-      "lighten": "تفتيح",
-      "add": "إضافة"
-    },
     "basemapOpacity": "عتامة خريطة الأساس",
     "newGroup": "مجموعة جديدة",
     "basemaps": "خرائط الأساس",

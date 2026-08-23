@@ -6257,6 +6257,15 @@
     "addClass": "वर्ग जोड़ें",
     "removeClass": "वर्ग हटाएं",
     "beforeIdSavedUnavailable": "सहेजा गया (अनुपलब्ध)",
+    "blendMode": "ब्लेंड",
+    "blendModeFor": "{{name}} के लिए ब्लेंड मोड",
+    "blendModes": {
+      "normal": "सामान्य",
+      "multiply": "मल्टिप्लाई",
+      "screen": "स्क्रीन",
+      "lighten": "हल्का करें",
+      "add": "जोड़ें"
+    },
     "raster": {
       "greyscale": "ग्रेस्केल",
       "greyscaleHint": "ग्रेस्केल बेसमैप टॉगल करें (संतृप्ति को न्यूनतम पर सेट करता है)",
@@ -6864,15 +6873,6 @@
     "opacityFor": "{{name}} के लिए अपारदर्शिता",
     "opacityValueInputAria": "{{label}} मान",
     "opacityValueEditAria": "{{label}} मान संपादित करें",
-    "blendMode": "ब्लेंड",
-    "blendModeFor": "{{name}} के लिए ब्लेंड मोड",
-    "blendModes": {
-      "normal": "सामान्य",
-      "multiply": "मल्टिप्लाई",
-      "screen": "स्क्रीन",
-      "lighten": "हल्का करें",
-      "add": "जोड़ें"
-    },
     "basemapOpacity": "बेसमैप अपारदर्शिता",
     "newGroup": "नया समूह",
     "basemaps": "बेसमैप",

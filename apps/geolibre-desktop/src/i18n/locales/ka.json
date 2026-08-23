@@ -6257,6 +6257,15 @@
     "addClass": "კლასის დამატება",
     "removeClass": "კლასის მოშორება",
     "beforeIdSavedUnavailable": "შენახული (მიუწვდომელი)",
+    "blendMode": "შერევა",
+    "blendModeFor": "{{name}}-ის შერევის რეჟიმი",
+    "blendModes": {
+      "normal": "ჩვეულებრივი",
+      "multiply": "გამრავლება",
+      "screen": "ეკრანი",
+      "lighten": "გაღიავება",
+      "add": "მიმატება"
+    },
     "raster": {
       "greyscale": "ნაცრისფერი",
       "greyscaleHint": "ნაცრისფერი ბაზური რუკის გადართვა (გაჯერებას მინიმუმამდე ამცირებს)",
@@ -6864,15 +6873,6 @@
     "opacityFor": "{{name}}-ის გამჭვირვალობა",
     "opacityValueInputAria": "{{label}} მნიშვნელობა",
     "opacityValueEditAria": "{{label}} მნიშვნელობის რედაქტირება",
-    "blendMode": "შერევა",
-    "blendModeFor": "{{name}}-ის შერევის რეჟიმი",
-    "blendModes": {
-      "normal": "ჩვეულებრივი",
-      "multiply": "გამრავლება",
-      "screen": "ეკრანი",
-      "lighten": "გაღიავება",
-      "add": "მიმატება"
-    },
     "basemapOpacity": "ბაზური რუკის გამჭვირვალობა",
     "newGroup": "ახალი ჯგუფი",
     "basemaps": "ბაზური რუკები",

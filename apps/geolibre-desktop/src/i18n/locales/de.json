@@ -6257,6 +6257,15 @@
     "addClass": "Klasse hinzufügen",
     "removeClass": "Klasse entfernen",
     "beforeIdSavedUnavailable": "Gespeichert (nicht verfügbar)",
+    "blendMode": "Mischen",
+    "blendModeFor": "Mischmodus für {{name}}",
+    "blendModes": {
+      "normal": "Normal",
+      "multiply": "Multiplizieren",
+      "screen": "Negativ multiplizieren",
+      "lighten": "Aufhellen",
+      "add": "Addieren"
+    },
     "raster": {
       "greyscale": "Graustufen",
       "greyscaleHint": "Graustufen-Basiskarte umschalten (setzt die Sättigung auf ihr Minimum)",
@@ -6864,15 +6873,6 @@
     "opacityFor": "Deckkraft für {{name}}",
     "opacityValueInputAria": "{{label}}-Wert",
     "opacityValueEditAria": "{{label}}-Wert bearbeiten",
-    "blendMode": "Mischen",
-    "blendModeFor": "Mischmodus für {{name}}",
-    "blendModes": {
-      "normal": "Normal",
-      "multiply": "Multiplizieren",
-      "screen": "Negativ multiplizieren",
-      "lighten": "Aufhellen",
-      "add": "Addieren"
-    },
     "basemapOpacity": "Deckkraft der Basiskarte",
     "newGroup": "Neue Gruppe",
     "basemaps": "Basiskarten",

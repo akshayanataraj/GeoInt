@@ -47,6 +47,40 @@ async function samplePixel(page: Page, fx: number, fy: number): Promise<number[]
 const luminance = ([r, g, b]: number[]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
 /**
+ * Opens the Style panel for a layer and returns its Blend menu.
+ *
+ * The menu lives with the rest of the layer's symbology rather than on the
+ * layer card, so reaching it means going through the card's palette button.
+ */
+/**
+ * The layer's Blend menu, opening the Style panel first if it is not showing.
+ *
+ * Re-checked before every use rather than held as a locator, because the Style
+ * panel shares the right sidebar with the plugin panels: one of those (the
+ * NASA OPERA panel, which auto-opens once its plugin finishes loading) can
+ * take the sidebar over part-way through a test and evict Style. Clicking the
+ * layer card's palette button again reclaims it.
+ *
+ * The menu is located page-wide rather than scoped to the panel: the Style
+ * panel's `<aside>` is nested inside the sidebar's own `<aside>`, so its
+ * implicit role is `generic`, not `complementary`. The per-layer aria-label is
+ * unique, and only present while the panel is open.
+ */
+async function blendMenu(page: Page, layerName: string) {
+  const select = page.getByLabel(`Blend mode for ${layerName}`);
+  if (!(await select.isVisible().catch(() => false))) {
+    await layerRow(page, layerName).getByRole("button", { name: "Open Style panel" }).click();
+    await expect(select).toBeVisible();
+  }
+  return select;
+}
+
+/** Sets a blend mode, reopening the Style panel if something displaced it. */
+async function setBlendMode(page: Page, layerName: string, mode: string) {
+  await (await blendMenu(page, layerName)).selectOption(mode);
+}
+
+/**
  * The centre pixel once the map has stopped changing.
  *
  * A blend mode never reaches a paint property, so there is no style event to
@@ -71,26 +105,23 @@ test("blends a vector layer against the map beneath it", async ({ page }) => {
   await dropGeoJson(page, "blendtest", POLYGON);
   await expect(layerRow(page, "blendtest")).toBeVisible();
 
-  const select = layerRow(page, "blendtest").getByLabel("Blend mode for blendtest");
-  await expect(select).toBeVisible();
-
   // Let the basemap tiles settle so the backdrop being blended into is stable.
   const normal = await settledPixel(page);
   expect(normal[3]).toBe(255);
 
-  await select.selectOption("multiply");
+  await setBlendMode(page, "blendtest", "multiply");
   await expect
     .poll(async () => luminance(await settledPixel(page)), { timeout: 15_000 })
     .toBeLessThan(luminance(normal));
 
-  await select.selectOption("screen");
+  await setBlendMode(page, "blendtest", "screen");
   await expect
     .poll(async () => luminance(await settledPixel(page)), { timeout: 15_000 })
     .toBeGreaterThan(luminance(normal));
 
   // Clearing the mode has to restore the layer exactly: `fill-layer-opacity` is
   // set to elect MapLibre's composite path and must be written back to 1.
-  await select.selectOption("normal");
+  await setBlendMode(page, "blendtest", "normal");
   await expect.poll(async () => settledPixel(page), { timeout: 15_000 }).toEqual(normal);
 });
 
@@ -99,8 +130,9 @@ test("keeps the canvas opaque and the uncovered map intact in every mode", async
   await dropGeoJson(page, "blendtest", POLYGON);
   await expect(layerRow(page, "blendtest")).toBeVisible();
 
-  const select = layerRow(page, "blendtest").getByLabel("Blend mode for blendtest");
-  const modes = await select
+  const modes = await (
+    await blendMenu(page, "blendtest")
+  )
     .locator("option")
     .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value));
   expect(modes).toContain("multiply");
@@ -113,7 +145,7 @@ test("keeps the canvas opaque and the uncovered map intact in every mode", async
 
   const rendered = new Map<string, number[]>();
   for (const mode of modes) {
-    await select.selectOption(mode);
+    await setBlendMode(page, "blendtest", mode);
     const centre = await settledPixel(page);
     // Alpha alone would prove nothing: the canvas is already opaque before a
     // mode is applied, so this assertion would pass on a frame the mode had not

@@ -6405,6 +6405,15 @@
     "addClass": "Добавить класс",
     "removeClass": "Удалить класс",
     "beforeIdSavedUnavailable": "Сохранено (недоступно)",
+    "blendMode": "Наложение",
+    "blendModeFor": "Режим наложения для {{name}}",
+    "blendModes": {
+      "normal": "Обычный",
+      "multiply": "Умножение",
+      "screen": "Экран",
+      "lighten": "Осветление",
+      "add": "Сложение"
+    },
     "raster": {
       "greyscale": "Оттенки серого",
       "greyscaleHint": "Переключить базовую карту в оттенки серого (снижает насыщенность до минимума)",
@@ -7018,15 +7027,6 @@
     "opacityFor": "Непрозрачность для {{name}}",
     "opacityValueInputAria": "Значение {{label}}",
     "opacityValueEditAria": "Изменить значение {{label}}",
-    "blendMode": "Наложение",
-    "blendModeFor": "Режим наложения для {{name}}",
-    "blendModes": {
-      "normal": "Обычный",
-      "multiply": "Умножение",
-      "screen": "Экран",
-      "lighten": "Осветление",
-      "add": "Сложение"
-    },
     "basemapOpacity": "Непрозрачность базовой карты",
     "newGroup": "Новая группа",
     "basemaps": "Базовые карты",

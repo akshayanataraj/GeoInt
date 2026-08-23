@@ -6183,6 +6183,15 @@
     "addClass": "클래스 추가",
     "removeClass": "클래스 제거",
     "beforeIdSavedUnavailable": "저장됨(사용 불가)",
+    "blendMode": "혼합",
+    "blendModeFor": "{{name}}의 혼합 모드",
+    "blendModes": {
+      "normal": "표준",
+      "multiply": "곱하기",
+      "screen": "스크린",
+      "lighten": "밝게",
+      "add": "더하기"
+    },
     "raster": {
       "greyscale": "그레이스케일",
       "greyscaleHint": "그레이스케일 배경지도를 전환합니다(채도를 최소로 낮춤)",
@@ -6787,15 +6796,6 @@
     "opacityFor": "{{name}}의 불투명도",
     "opacityValueInputAria": "{{label}} 값",
     "opacityValueEditAria": "{{label}} 값 편집",
-    "blendMode": "혼합",
-    "blendModeFor": "{{name}}의 혼합 모드",
-    "blendModes": {
-      "normal": "표준",
-      "multiply": "곱하기",
-      "screen": "스크린",
-      "lighten": "밝게",
-      "add": "더하기"
-    },
     "basemapOpacity": "배경지도 불투명도",
     "newGroup": "새 그룹",
     "basemaps": "배경지도",
