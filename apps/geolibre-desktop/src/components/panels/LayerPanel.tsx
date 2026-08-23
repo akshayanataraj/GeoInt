@@ -28,6 +28,7 @@ import {
   copyableLayerStyleKind,
   BLEND_MODES,
   DEFAULT_BLEND_MODE,
+  controlRendersLayer,
   pluginOwnsPaint,
   supportsBridgedOpacity,
   useAppStore,
@@ -3546,17 +3547,26 @@ export function LayerPanel({
                       />
                     )}
                     {/* Blending is applied inside MapLibre's render loop, so a
-                        plugin-painted layer (its own WebGL custom layer, drawn
-                        outside that loop) cannot honour it — same reason the
-                        opacity slider is bridged rather than direct (#1445). */}
-                    {!pluginOwnsPaint(layer) && blendModesSupported && (
-                      <LayerBlendModeSelect
-                        layerId={layer.id}
-                        layerName={layer.name}
-                        value={layer.style.blendMode ?? DEFAULT_BLEND_MODE}
-                        onChange={(mode) => setLayerStyle(layer.id, { blendMode: mode })}
-                      />
-                    )}
+                        layer drawn outside it cannot honour the mode — the same
+                        reason the opacity slider is bridged rather than direct
+                        (#1445). Two independent marks: `paintMode` for a plugin
+                        that paints GeoLibre's own style layers itself, and
+                        `customLayerType` for a control drawing its own
+                        `type: "custom"` WebGL layer (3D Tiles, Gaussian splats,
+                        LiDAR, and the deck.gl COG raster engine). Add Vector
+                        Layer and plain XYZ/WMS rasters set neither: their
+                        native layers are real MapLibre style layers, so they
+                        blend. */}
+                    {!pluginOwnsPaint(layer) &&
+                      !controlRendersLayer(layer) &&
+                      blendModesSupported && (
+                        <LayerBlendModeSelect
+                          layerId={layer.id}
+                          layerName={layer.name}
+                          value={layer.style.blendMode ?? DEFAULT_BLEND_MODE}
+                          onChange={(mode) => setLayerStyle(layer.id, { blendMode: mode })}
+                        />
+                      )}
                     <div className="mt-2 flex flex-wrap gap-1">
                       <Button
                         variant="ghost"

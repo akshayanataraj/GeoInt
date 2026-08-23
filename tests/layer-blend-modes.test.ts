@@ -3,7 +3,13 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { afterEach, describe, it } from "node:test";
 import { v8 } from "@maplibre/maplibre-gl-style-spec";
-import { BLEND_MODES, DEFAULT_LAYER_STYLE, type GeoLibreLayer } from "@geolibre/core";
+import {
+  BLEND_MODES,
+  DEFAULT_LAYER_STYLE,
+  controlRendersLayer,
+  pluginOwnsPaint,
+  type GeoLibreLayer,
+} from "@geolibre/core";
 import {
   LAYER_OPACITY_FOR_BLEND,
   blendModeForNativeLayer,
@@ -259,6 +265,34 @@ describe("the native style-layer registry", () => {
     ]);
     syncLayerBlendModes([]);
     assert.equal(blendModeForNativeLayer("layer-abc-fill"), null);
+  });
+});
+
+describe("the layer kinds the Blend control is offered for", () => {
+  // The Layers panel gates on `!pluginOwnsPaint && !controlRendersLayer`. The
+  // two marks are independent, which is the whole reason both are needed: a
+  // control that draws its own `type: "custom"` WebGL layer sets
+  // `customLayerType` and never sets `paintMode`, so gating on `paintMode`
+  // alone left a Blend control on 3D Tiles, Gaussian splats, LiDAR, and the
+  // deck.gl COG raster engine that silently did nothing but still saved a mode.
+  const customRendered = (kind: string) => layer("x", { metadata: { customLayerType: kind } });
+
+  it("treats a custom-rendered control layer as unblendable", () => {
+    for (const kind of ["3d-tiles", "gaussian-splat", "lidar", "raster"]) {
+      assert.equal(controlRendersLayer(customRendered(kind)), true, kind);
+      // The key point: the plugin-paint mark does NOT also cover these.
+      assert.equal(pluginOwnsPaint(customRendered(kind)), false, kind);
+    }
+  });
+
+  it("leaves MapLibre-drawn layers blendable", () => {
+    // A plain XYZ/WMS raster and an Add Vector Layer control layer both render
+    // real MapLibre style layers, and both blend (verified in the browser).
+    assert.equal(controlRendersLayer(layer("xyz", { type: "xyz" })), false);
+    assert.equal(pluginOwnsPaint(layer("xyz", { type: "xyz" })), false);
+    const vectorControl = layer("vec", { metadata: { nativeLayerIds: ["ctrl-fill"] } });
+    assert.equal(controlRendersLayer(vectorControl), false);
+    assert.equal(pluginOwnsPaint(vectorControl), false);
   });
 });
 

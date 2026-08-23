@@ -588,7 +588,7 @@ export class MapController {
       // declaring blending unavailable, and this is the "next call" that
       // resolves it. Idempotent (the wrappers live on shared prototypes and
       // are installed once), so the repeat costs a feature probe.
-      installLayerBlendModes(this.map!);
+      if (this.map) installLayerBlendModes(this.map);
       this.enforceProjection();
       this.addTerrainSource();
       // If the Terrain control was switched on before the style finished

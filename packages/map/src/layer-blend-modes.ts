@@ -173,6 +173,12 @@ function modeForNativeLayer(nativeLayerId: string): BlendMode | null {
     // always the owning layer, because the extra characters are part of its id.
     let bestPrefix = -1;
     for (const registration of registrations.values()) {
+      // An exact match outranks any prefix match, however long: naming a
+      // native layer id is an explicit claim by the layer's control, while a
+      // prefix is inferred from GeoLibre's own naming. The two can only
+      // collide if a project declares a `nativeLayerIds` entry spelled like
+      // another layer's generated sub-layer, which is a malformed project
+      // rather than a case with a right answer.
       if (registration.exact.includes(nativeLayerId)) {
         mode = registration.mode;
         break;
