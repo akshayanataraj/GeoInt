@@ -15,7 +15,7 @@ import {
   type LayerStyle,
 } from "@geolibre/core";
 import type { ExpressionSpecification, PropertyValueSpecification } from "maplibre-gl";
-import { LAYER_OPACITY_FOR_BLEND, isBlending } from "./layer-blend-modes";
+import { LAYER_OPACITY_FOR_BLEND, isBlending, layerBlendModesSupported } from "./layer-blend-modes";
 
 function styleValue<K extends keyof LayerStyle>(style: LayerStyle, key: K): LayerStyle[K] {
   return style[key] ?? DEFAULT_LAYER_STYLE[key];
@@ -39,9 +39,14 @@ function scaleByOpacity(
  * The `*-layer-opacity` a fill or line layer renders with: just under 1 while
  * the layer blends, so MapLibre flattens it into a scratch framebuffer and
  * composites it in the single draw `layer-blend-modes` applies the mode to.
+ *
+ * Also gated on support, so a build where the render wrappers failed to install
+ * is fully inert rather than only visually inert: a project saved with a blend
+ * mode would otherwise still pay for a render-to-texture pass per blended
+ * layer, compositing a mode that nothing is left to apply.
  */
 function layerOpacityForBlend(style: LayerStyle): number {
-  return isBlending(style.blendMode) ? LAYER_OPACITY_FOR_BLEND : 1;
+  return isBlending(style.blendMode) && layerBlendModesSupported() ? LAYER_OPACITY_FOR_BLEND : 1;
 }
 
 export function fillPaint(style: LayerStyle, opacity: number) {

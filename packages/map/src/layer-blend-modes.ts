@@ -382,7 +382,7 @@ export function installLayerBlendModes(map: maplibregl.Map): boolean {
     typeof context.blendFunc?.set === "function" &&
     typeof context.blendEquation?.set === "function";
   if (!seamsPresent) {
-    // A maplibre-gl bump moved something. Blending stays off (the Style panel
+    // A maplibre-gl bump moved something. Blending stays off (the Layers panel
     // reads `layerBlendModesSupported`), and the map renders exactly as before.
     console.warn(
       "[geolibre] per-layer blend modes disabled: this maplibre-gl build does not expose the expected render seams",

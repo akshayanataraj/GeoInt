@@ -65,7 +65,8 @@ file, SLD, or QML.
     for the upstream work that would widen this list.
 
 Blending is applied while MapLibre draws a layer, so it reaches only the layers
-GeoLibre itself styles. Those have no Blend menu:
+GeoLibre itself styles. The following are drawn or styled elsewhere, and so have
+no Blend menu:
 
 - **3D Tiles, Gaussian splats, LiDAR point clouds, and deck.gl overlays**, which
   draw with their own WebGL renderer instead of MapLibre's.
