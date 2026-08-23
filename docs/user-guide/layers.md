@@ -64,12 +64,19 @@ file, SLD, or QML.
     cover it. See [maplibre-gl-js#8073](https://github.com/maplibre/maplibre-gl-js/pull/8073)
     for the upstream work that would widen this list.
 
-Some layers draw with their own WebGL renderer rather than through MapLibre's,
-so blending cannot reach them and they have no Blend menu: 3D Tiles, Gaussian
-splats, LiDAR point clouds, deck.gl overlays, and Cloud-Optimized GeoTIFFs added
-through **Add Data > Raster Layer**. Ordinary raster layers (XYZ, WMS, WMTS) and
-vector layers added through **Add Data > Vector Layer** are drawn by MapLibre
-and do blend.
+Blending is applied while MapLibre draws a layer, so it reaches only the layers
+GeoLibre itself styles. Those have no Blend menu:
+
+- **3D Tiles, Gaussian splats, LiDAR point clouds, and deck.gl overlays**, which
+  draw with their own WebGL renderer instead of MapLibre's.
+- **Cloud-Optimized GeoTIFFs** added through **Add Data > Raster Layer**, for
+  the same reason on their default rendering engine.
+- **Vector layers added through Add Data > Vector Layer**, which do draw through
+  MapLibre but are styled by their own control rather than by GeoLibre, so there
+  is no point at which the blend mode could be applied.
+
+Everything else blends: local and remote GeoJSON, ordinary raster layers (XYZ,
+WMS, WMTS), PMTiles, MBTiles, and vector tiles.
 
 ## Per-layer actions
 

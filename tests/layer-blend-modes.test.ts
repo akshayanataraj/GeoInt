@@ -285,14 +285,41 @@ describe("the layer kinds the Blend control is offered for", () => {
     }
   });
 
-  it("leaves MapLibre-drawn layers blendable", () => {
-    // A plain XYZ/WMS raster and an Add Vector Layer control layer both render
-    // real MapLibre style layers, and both blend (verified in the browser).
-    assert.equal(controlRendersLayer(layer("xyz", { type: "xyz" })), false);
-    assert.equal(pluginOwnsPaint(layer("xyz", { type: "xyz" })), false);
-    const vectorControl = layer("vec", { metadata: { nativeLayerIds: ["ctrl-fill"] } });
-    assert.equal(controlRendersLayer(vectorControl), false);
-    assert.equal(pluginOwnsPaint(vectorControl), false);
+  it("gates out an Add Vector Layer control layer", () => {
+    // Built as `createVectorStoreLayer` builds it: `customLayerType` is set
+    // unconditionally (`vectorCustomLayerType` always returns a string)
+    // alongside `nativeLayerIds` and `controlOwnsPaint`. Its native layers are
+    // real MapLibre fill/line layers, but the control paints them itself, so
+    // layer-sync never applies `fillPaint`/`linePaint` to them and the
+    // `fill-layer-opacity` that elects the composite path never lands. The
+    // control is correctly hidden; blending Add Vector Layer would mean routing
+    // the property through the control's own style, which this PR does not do.
+    const vectorControl = layer("vec", {
+      metadata: {
+        customLayerType: "fill",
+        externalNativeLayer: true,
+        controlOwnsPaint: true,
+        nativeLayerIds: ["ctrl-fill", "ctrl-line"],
+      },
+    });
+    assert.equal(controlRendersLayer(vectorControl), true);
+  });
+
+  it("leaves MapLibre-painted layers blendable", () => {
+    // A plain XYZ/WMS raster (verified blending in the browser), and an
+    // external-native PMTiles layer, which declares `nativeLayerIds` but leaves
+    // both `customLayerType` and `controlOwnsPaint` unset -- so GeoLibre does
+    // apply its paint, and the composite path is available.
+    for (const candidate of [
+      layer("xyz", { type: "xyz" }),
+      layer("pm", {
+        type: "pmtiles",
+        metadata: { externalNativeLayer: true, nativeLayerIds: ["layer-pm-fill"] },
+      }),
+    ]) {
+      assert.equal(controlRendersLayer(candidate), false, candidate.id);
+      assert.equal(pluginOwnsPaint(candidate), false, candidate.id);
+    }
   });
 });
 

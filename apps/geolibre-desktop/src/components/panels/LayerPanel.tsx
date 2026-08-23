@@ -3551,12 +3551,13 @@ export function LayerPanel({
                         reason the opacity slider is bridged rather than direct
                         (#1445). Two independent marks: `paintMode` for a plugin
                         that paints GeoLibre's own style layers itself, and
-                        `customLayerType` for a control drawing its own
-                        `type: "custom"` WebGL layer (3D Tiles, Gaussian splats,
-                        LiDAR, and the deck.gl COG raster engine). Add Vector
-                        Layer and plain XYZ/WMS rasters set neither: their
-                        native layers are real MapLibre style layers, so they
-                        blend. */}
+                        `customLayerType` for a control that renders its layers
+                        itself (3D Tiles, Gaussian splats, LiDAR, the COG
+                        raster engine, and Add Vector Layer, which paints its
+                        own native fill/line layers so GeoLibre never applies
+                        the `fill-layer-opacity` that elects the composite
+                        path). Plain XYZ/WMS rasters and external-native
+                        PMTiles/MBTiles layers set neither, and do blend. */}
                     {!pluginOwnsPaint(layer) &&
                       !controlRendersLayer(layer) &&
                       blendModesSupported && (
