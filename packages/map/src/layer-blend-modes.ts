@@ -295,7 +295,10 @@ function registrationsChanged(
     const previous = current.get(id);
     if (!previous) return true;
     if (previous.mode !== registration.mode) return true;
-    if (previous.prefix !== registration.prefix) return true;
+    // `prefix` is not compared: both maps are keyed by layer id and the prefix
+    // is derived from that same id, so a matching key always has a matching
+    // prefix. Only `mode` and `exact` (which comes from layer metadata) can
+    // differ between syncs for one id.
     if (previous.exact.length !== registration.exact.length) return true;
     if (previous.exact.some((value, index) => value !== registration.exact[index])) return true;
   }
@@ -458,9 +461,14 @@ export function installLayerBlendModes(map: maplibregl.Map): boolean {
   if (!seamsPresent) {
     // A maplibre-gl bump moved something. Blending stays off (the Style panel
     // reads `layerBlendModesSupported`), and the map renders exactly as before.
-    console.warn(
-      "[geolibre] per-layer blend modes disabled: this maplibre-gl build does not expose the expected render seams",
-    );
+    // Warned only on the transition, because install runs again on every
+    // `style.load` and once per map: an unsupported build would otherwise
+    // repeat this for the life of the session.
+    if (supported !== false) {
+      console.warn(
+        "[geolibre] per-layer blend modes disabled: this maplibre-gl build does not expose the expected render seams",
+      );
+    }
     setSupported(false);
     return false;
   }

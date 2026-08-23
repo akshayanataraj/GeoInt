@@ -1,6 +1,5 @@
 import {
   BLEND_MODES,
-  DEFAULT_BLEND_MODE,
   DEFAULT_LAYER_STYLE,
   controlRendersLayer,
   isInitialLayerStyle,
@@ -2209,7 +2208,7 @@ export function StylePanel({
         <Select
           id={blendModeSelectId}
           aria-label={t("style.blendModeFor", { name: layer.name })}
-          value={styleValue(style, "blendMode") ?? DEFAULT_BLEND_MODE}
+          value={styleValue(style, "blendMode")}
           onChange={(event) =>
             setLayerStyle(layer.id, { blendMode: event.target.value as BlendMode })
           }
