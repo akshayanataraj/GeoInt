@@ -165,13 +165,24 @@ function modeForNativeLayer(nativeLayerId: string): BlendMode | null {
   if (cached !== undefined) return cached;
   let mode: BlendMode | null = null;
   if (!UNBLENDED_SUFFIXES.some((suffix) => nativeLayerId.endsWith(suffix))) {
+    // Longest prefix wins, not first match. Store layer ids are UUIDs when data
+    // is added through the app, but a hand-authored or MCP-authored
+    // `.geolibre.json` may carry any string, and ids like `abc` and `abc-2`
+    // both prefix `layer-abc-2-fill`. Insertion order would then decide, and
+    // `abc`'s mode could land on `abc-2`'s sub-layers. The longer prefix is
+    // always the owning layer, because the extra characters are part of its id.
+    let bestPrefix = -1;
     for (const registration of registrations.values()) {
-      if (
-        registration.exact.includes(nativeLayerId) ||
-        nativeLayerId.startsWith(registration.prefix)
-      ) {
+      if (registration.exact.includes(nativeLayerId)) {
         mode = registration.mode;
         break;
+      }
+      if (
+        nativeLayerId.startsWith(registration.prefix) &&
+        registration.prefix.length > bestPrefix
+      ) {
+        bestPrefix = registration.prefix.length;
+        mode = registration.mode;
       }
     }
   }
@@ -232,7 +243,16 @@ function registrationsChanged(
   return false;
 }
 
-/** Drops every registration. Exposed for tests and map teardown. */
+/**
+ * Drops every registration. Exposed for tests.
+ *
+ * Deliberately NOT called from `MapController.destroy()`: the registry is
+ * module-global and shared by every map, so tearing one pane of a split view
+ * down would clear the other pane's modes until its next sync. Nothing leaks by
+ * leaving it -- `syncLayerBlendModes` rebuilds the whole registry from the live
+ * layer list on every sync, so a destroyed map's entries are replaced rather
+ * than accumulating.
+ */
 export function resetLayerBlendModes(): void {
   registrations.clear();
   resolved = new Map();

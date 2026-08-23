@@ -210,6 +210,28 @@ describe("the native style-layer registry", () => {
     assert.equal(blendModeForNativeLayer("ext"), null);
   });
 
+  it("gives a sub-layer to the layer whose id is the longer prefix", () => {
+    // Ids from the app are UUIDs, but a hand-authored or MCP-authored
+    // .geolibre.json may carry any string. "layer-abc-2-fill" starts with both
+    // "layer-abc-" and "layer-abc-2-", so first-match-wins would hand abc-2's
+    // sub-layers to abc whenever abc was registered first.
+    syncLayerBlendModes([
+      layer("abc", { style: { ...DEFAULT_LAYER_STYLE, blendMode: "multiply" } }),
+      layer("abc-2", { style: { ...DEFAULT_LAYER_STYLE, blendMode: "screen" } }),
+    ]);
+    assert.equal(blendModeForNativeLayer("layer-abc-fill"), "multiply");
+    assert.equal(blendModeForNativeLayer("layer-abc-2-fill"), "screen");
+
+    // ...and the same with the registration order reversed.
+    resetLayerBlendModes();
+    syncLayerBlendModes([
+      layer("abc-2", { style: { ...DEFAULT_LAYER_STYLE, blendMode: "screen" } }),
+      layer("abc", { style: { ...DEFAULT_LAYER_STYLE, blendMode: "multiply" } }),
+    ]);
+    assert.equal(blendModeForNativeLayer("layer-abc-fill"), "multiply");
+    assert.equal(blendModeForNativeLayer("layer-abc-2-fill"), "screen");
+  });
+
   it("ignores layers left on normal", () => {
     syncLayerBlendModes([layer("plain")]);
     assert.equal(blendModeForNativeLayer("layer-plain-fill"), null);

@@ -583,6 +583,12 @@ export class MapController {
     // redundant jumpTo that can interrupt the initial camera.
     const handleStyleReady = () => {
       this.styleReady = true;
+      // Retried here because the constructor call above is a no-op if the
+      // painter does not exist yet: it leaves support undecided rather than
+      // declaring blending unavailable, and this is the "next call" that
+      // resolves it. Idempotent (the wrappers live on shared prototypes and
+      // are installed once), so the repeat costs a feature probe.
+      installLayerBlendModes(this.map!);
       this.enforceProjection();
       this.addTerrainSource();
       // If the Terrain control was switched on before the style finished

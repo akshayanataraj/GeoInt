@@ -583,9 +583,7 @@ function LayerBlendModeSelect({ layerId, layerName, value, onChange }: LayerBlen
   const selectId = `blend-mode-${layerId}`;
   return (
     <div className="mt-2 flex items-center gap-1">
-      <span className="text-[10px] text-muted-foreground" id={`${selectId}-label`}>
-        {t("layers.blendMode")}
-      </span>
+      <span className="text-[10px] text-muted-foreground">{t("layers.blendMode")}</span>
       <Select
         id={selectId}
         className="flex-1"
