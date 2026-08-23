@@ -157,7 +157,19 @@ interface Registration {
 }
 
 const registrations = new Map<string, Registration>();
-/** Memoized native-id → mode lookups; rebuilt whenever registrations change. */
+/**
+ * The `layer-<layerId>-` prefix of EVERY layer on the map, blending or not,
+ * longest first.
+ *
+ * Prefix matching needs to know about layers that do not blend, not just the
+ * ones that do. `region` blending and `region-2` not would otherwise leave
+ * `layer-region-2-fill` matching `region`'s prefix with nothing registered to
+ * contest it, so a layer explicitly set to Normal would blend. Comparing
+ * against every layer's prefix means the longest match is always the owning
+ * layer, and a non-blending owner correctly resolves to no mode.
+ */
+let layerPrefixes: { prefix: string; layerId: string }[] = [];
+/** Memoized native-id → mode lookups; dropped on every sync. */
 let resolved = new Map<string, BlendMode | null>();
 
 function modeForNativeLayer(nativeLayerId: string): BlendMode | null {
@@ -169,31 +181,27 @@ function modeForNativeLayer(nativeLayerId: string): BlendMode | null {
   if (cached !== undefined) return cached;
   let mode: BlendMode | null = null;
   if (!UNBLENDED_SUFFIXES.some((suffix) => nativeLayerId.endsWith(suffix))) {
-    // Longest prefix wins, not first match. Store layer ids are UUIDs when data
-    // is added through the app, but a hand-authored or MCP-authored
-    // `.geolibre.json` may carry any string, and ids like `abc` and `abc-2`
-    // both prefix `layer-abc-2-fill`. Insertion order would then decide, and
-    // `abc`'s mode could land on `abc-2`'s sub-layers. The longer prefix is
-    // always the owning layer, because the extra characters are part of its id.
-    let bestPrefix = -1;
-    for (const registration of registrations.values()) {
-      // An exact match outranks any prefix match, however long: naming a
-      // native layer id is an explicit claim by the layer's control, while a
-      // prefix is inferred from GeoLibre's own naming. The two can only
-      // collide if a project declares a `nativeLayerIds` entry spelled like
-      // another layer's generated sub-layer, which is a malformed project
-      // rather than a case with a right answer.
-      if (registration.exact.includes(nativeLayerId)) {
-        mode = registration.mode;
-        break;
-      }
-      if (
-        nativeLayerId.startsWith(registration.prefix) &&
-        registration.prefix.length > bestPrefix
-      ) {
-        bestPrefix = registration.prefix.length;
-        mode = registration.mode;
-      }
+    // An exact match outranks any prefix match, however long: naming a native
+    // layer id is an explicit claim by the layer's control, while a prefix is
+    // inferred from GeoLibre's own naming. The two can only collide if a
+    // project declares a `nativeLayerIds` entry spelled like another layer's
+    // generated sub-layer, which is a malformed project rather than a case
+    // with a right answer.
+    const exact = [...registrations.values()].find((registration) =>
+      registration.exact.includes(nativeLayerId),
+    );
+    if (exact) {
+      mode = exact.mode;
+    } else {
+      // Longest prefix wins, not first match, and the search runs over every
+      // layer rather than only the blending ones -- see `layerPrefixes`. Store
+      // layer ids are UUIDs when data is added through the app, but a
+      // hand-authored or MCP-authored `.geolibre.json` may carry any string,
+      // and ids like `abc` and `abc-2` both prefix `layer-abc-2-fill`. The
+      // longer prefix is always the owning layer, because the extra characters
+      // are part of its id.
+      const owner = layerPrefixes.find((entry) => nativeLayerId.startsWith(entry.prefix));
+      mode = owner ? (registrations.get(owner.layerId)?.mode ?? null) : null;
     }
   }
   resolved.set(nativeLayerId, mode);
@@ -229,6 +237,13 @@ export function syncLayerBlendModes(layers: readonly GeoLibreLayer[]): boolean {
       prefix: `layer-${layer.id}-`,
     });
   }
+
+  // Longest first, so `modeForNativeLayer` can take the first match. Rebuilt
+  // from the full layer list, not just the blending subset, so a layer left on
+  // Normal still shadows a shorter-id neighbour's prefix.
+  layerPrefixes = layers
+    .map((layer) => ({ prefix: `layer-${layer.id}-`, layerId: layer.id }))
+    .sort((a, b) => b.prefix.length - a.prefix.length);
 
   // Dropped on every sync, not only when the registry changed: entries are
   // keyed by native style-layer id, so a session that adds and discards layers
@@ -272,6 +287,7 @@ function registrationsChanged(
  */
 export function resetLayerBlendModes(): void {
   registrations.clear();
+  layerPrefixes = [];
   resolved = new Map();
 }
 

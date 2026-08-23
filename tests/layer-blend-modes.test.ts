@@ -238,6 +238,29 @@ describe("the native style-layer registry", () => {
     assert.equal(blendModeForNativeLayer("layer-abc-2-fill"), "screen");
   });
 
+  it("does not leak a mode onto a non-blending layer with a longer id", () => {
+    // The case longest-prefix-wins does not cover on its own: `region-2` is set
+    // to Normal, so it is not in the registry at all, yet
+    // `layer-region-2-fill` starts with `region`'s `layer-region-` prefix.
+    // Resolution has to compare against every layer's prefix, not just the
+    // blending ones, or a layer explicitly set to Normal blends.
+    syncLayerBlendModes([
+      layer("region", { style: { ...DEFAULT_LAYER_STYLE, blendMode: "multiply" } }),
+      layer("region-2"),
+    ]);
+    assert.equal(blendModeForNativeLayer("layer-region-fill"), "multiply");
+    assert.equal(blendModeForNativeLayer("layer-region-2-fill"), null);
+
+    // ...and with the layer order reversed.
+    resetLayerBlendModes();
+    syncLayerBlendModes([
+      layer("region-2"),
+      layer("region", { style: { ...DEFAULT_LAYER_STYLE, blendMode: "multiply" } }),
+    ]);
+    assert.equal(blendModeForNativeLayer("layer-region-fill"), "multiply");
+    assert.equal(blendModeForNativeLayer("layer-region-2-fill"), null);
+  });
+
   it("ignores layers left on normal", () => {
     syncLayerBlendModes([layer("plain")]);
     assert.equal(blendModeForNativeLayer("layer-plain-fill"), null);
