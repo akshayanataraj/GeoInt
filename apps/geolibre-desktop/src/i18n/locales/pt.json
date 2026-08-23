@@ -6869,7 +6869,7 @@
     "blendModes": {
       "normal": "Normal",
       "multiply": "Multiplicar",
-      "screen": "Divisão",
+      "screen": "Tela",
       "lighten": "Clarear",
       "add": "Adicionar"
     },
