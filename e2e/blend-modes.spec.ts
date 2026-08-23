@@ -111,19 +111,38 @@ test("keeps the canvas opaque and the uncovered map intact in every mode", async
   const baseline = await settledPixel(page);
   expect(baseline[3]).toBe(255);
 
+  const rendered = new Map<string, number[]>();
   for (const mode of modes) {
     await select.selectOption(mode);
     const centre = await settledPixel(page);
     // Alpha alone would prove nothing: the canvas is already opaque before a
-    // mode is applied, so the assertion would pass on a frame the mode had not
-    // reached yet. Requiring a colour change first pins that it actually took.
-    if (mode !== "normal") {
-      expect(centre.slice(0, 3), `${mode} did not change the rendered colour`).not.toEqual(
-        baseline.slice(0, 3),
-      );
-    } else {
-      expect(centre, "normal did not restore the unblended pixel").toEqual(baseline);
-    }
+    // mode is applied, so this assertion would pass on a frame the mode had not
+    // reached yet. The colour assertions below are what pin that it took.
     expect(centre[3], `${mode} left the canvas translucent`).toBe(255);
+    rendered.set(mode, centre);
+  }
+
+  expect(rendered.get("normal"), "normal did not restore the unblended pixel").toEqual(baseline);
+
+  // Every mode has to render a pixel no other mode produced. Comparing each
+  // mode against `baseline` alone would not catch a mode being dropped: a
+  // stale frame left over from the previous mode also differs from the
+  // unblended pixel, so the weaker check passes while nothing was applied.
+  const byColour = new Map<string, string>();
+  for (const [mode, pixel] of rendered) {
+    const colour = pixel.slice(0, 3).join(",");
+    const clash = byColour.get(colour);
+    expect(clash, `${mode} rendered rgb(${colour}), the same pixel as ${clash}`).toBeUndefined();
+    byColour.set(colour, mode);
+  }
+
+  // ...and in the direction the mode is named for, against the same backdrop.
+  expect(luminance(rendered.get("multiply")!), "multiply did not darken").toBeLessThan(
+    luminance(baseline),
+  );
+  for (const lightening of ["screen", "lighten", "add"]) {
+    expect(luminance(rendered.get(lightening)!), `${lightening} did not lighten`).toBeGreaterThan(
+      luminance(baseline),
+    );
   }
 });
