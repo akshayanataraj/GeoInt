@@ -317,6 +317,26 @@ interface PainterLike {
   useProgram(name: string, ...rest: unknown[]): unknown;
 }
 
+/**
+ * The style layer among `renderLayer`'s arguments.
+ *
+ * `maplibre-gl` passes it third today, but the signature is internal and could
+ * be reordered by a bump without renaming the method, which the bundle-shape
+ * drift test would not catch. Reading it by shape rather than by position keeps
+ * blending working through a reorder; the loud guard for the whole mechanism is
+ * `e2e/blend-modes.spec.ts`, which asserts real pixels change per mode and so
+ * fails in CI if this ever stops finding the layer.
+ */
+function styleLayerArgument(args: unknown[]): { id?: string; type?: string } | undefined {
+  for (let index = 2; index < args.length + 2; index += 1) {
+    const candidate = args[index % args.length] as { id?: unknown; type?: unknown } | undefined;
+    if (typeof candidate?.id === "string" && typeof candidate.type === "string") {
+      return candidate as { id: string; type: string };
+    }
+  }
+  return undefined;
+}
+
 /** Marks a prototype this module has already wrapped (prototypes are shared). */
 const PATCHED = Symbol.for("geolibre.layerBlendModes.patched");
 
@@ -425,7 +445,7 @@ export function installLayerBlendModes(map: maplibregl.Map): boolean {
   if (!painterProto[PATCHED]) {
     const originalRenderLayer = painterProto.renderLayer;
     painterProto.renderLayer = function renderLayer(this: PainterLike, ...args: unknown[]) {
-      const layer = args[2] as { id?: string; type?: string } | undefined;
+      const layer = styleLayerArgument(args);
       const previous = active;
       const mode = layer?.id ? modeForNativeLayer(layer.id) : null;
       const spec = mode ? blendSpecFor(mode, gl) : null;

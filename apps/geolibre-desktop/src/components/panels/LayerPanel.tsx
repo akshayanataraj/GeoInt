@@ -584,7 +584,13 @@ function LayerBlendModeSelect({ layerId, layerName, value, onChange }: LayerBlen
   const selectId = `blend-mode-${layerId}`;
   return (
     <div className="mt-2 flex items-center gap-1">
-      <span className="text-[10px] text-muted-foreground">{t("layers.blendMode")}</span>
+      {/* A real label rather than a span (the opacity slider's neighbour above
+          drives a Slider, which has no focusable control an htmlFor could
+          target): clicking the word focuses the menu, and it puts `selectId` to
+          use instead of leaving it unreferenced. */}
+      <label className="text-[10px] text-muted-foreground" htmlFor={selectId}>
+        {t("layers.blendMode")}
+      </label>
       <Select
         id={selectId}
         className="flex-1"
