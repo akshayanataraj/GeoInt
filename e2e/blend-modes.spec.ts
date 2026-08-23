@@ -47,12 +47,6 @@ async function samplePixel(page: Page, fx: number, fy: number): Promise<number[]
 const luminance = ([r, g, b]: number[]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
 /**
- * Opens the Style panel for a layer and returns its Blend menu.
- *
- * The menu lives with the rest of the layer's symbology rather than on the
- * layer card, so reaching it means going through the card's palette button.
- */
-/**
  * The layer's Blend menu, opening the Style panel first if it is not showing.
  *
  * Re-checked before every use rather than held as a locator, because the Style

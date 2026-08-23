@@ -693,7 +693,6 @@ export function LayerPanel({
   }, [selectedPlanet, basemapStyleUrl]);
   const setLayerVisibility = useAppStore((s) => s.setLayerVisibility);
   const setLayerOpacity = useAppStore((s) => s.setLayerOpacity);
-  const setLayerStyle = useAppStore((s) => s.setLayerStyle);
   const reorderLayer = useAppStore((s) => s.reorderLayer);
   const moveLayer = useAppStore((s) => s.moveLayer);
   const moveLayersRelative = useAppStore((s) => s.moveLayersRelative);
