@@ -161,6 +161,10 @@ const registrations = new Map<string, Registration>();
 let resolved = new Map<string, BlendMode | null>();
 
 function modeForNativeLayer(nativeLayerId: string): BlendMode | null {
+  // The overwhelmingly common case: nothing on the map blends. Answer without
+  // touching the cache, so a session that never sets a mode cannot accumulate
+  // an entry per native style layer it has ever drawn.
+  if (registrations.size === 0) return null;
   const cached = resolved.get(nativeLayerId);
   if (cached !== undefined) return cached;
   let mode: BlendMode | null = null;
@@ -226,10 +230,17 @@ export function syncLayerBlendModes(layers: readonly GeoLibreLayer[]): boolean {
     });
   }
 
+  // Dropped on every sync, not only when the registry changed: entries are
+  // keyed by native style-layer id, so a session that adds and discards layers
+  // (repeated Processing runs, say) would otherwise keep one per id it has ever
+  // drawn for the lifetime of the page. Rebuilding is a handful of string
+  // comparisons per layer against a registry that is normally one or two
+  // entries, and syncs happen on store changes rather than per frame.
+  resolved = new Map();
+
   if (!registrationsChanged(registrations, next)) return false;
   registrations.clear();
   for (const [id, registration] of next) registrations.set(id, registration);
-  resolved = new Map();
   return true;
 }
 
