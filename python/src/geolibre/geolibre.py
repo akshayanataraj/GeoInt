@@ -1632,6 +1632,117 @@ class Map(anywidget.AnyWidget):
             )
         )
 
+    def add_ee_layer(
+        self,
+        ee_object: Any,
+        vis_params: dict[str, Any] | None = None,
+        name: str = "Earth Engine",
+        shown: bool = True,
+        opacity: float = 1.0,
+    ) -> str:
+        """Add a Google Earth Engine object as a raster tile layer.
+
+        This follows the ``geemap``/``leafmap`` convention: Earth Engine is
+        evaluated in the Python kernel to obtain a map tile URL, while the
+        GeoLibre app renders that URL as a normal raster layer. Earth Engine
+        must already be authenticated and initialized (usually with
+        ``ee.Authenticate()`` and ``ee.Initialize(project=...)``).
+
+        Args:
+            ee_object: An ``ee.Image``, ``ee.ImageCollection``,
+                ``ee.FeatureCollection``, ``ee.Feature``, or ``ee.Geometry``.
+                A compatible object exposing ``getMapId`` is also accepted.
+            vis_params: Earth Engine visualization parameters, such as
+                ``bands``, ``min``, ``max``, and ``palette``.
+            name: Layer display name.
+            shown: Whether the layer is initially visible.
+            opacity: Initial opacity between 0 and 1.
+
+        Returns:
+            The id of the added layer.
+
+        Raises:
+            ImportError: If conversion requires the optional Earth Engine
+                Python package and it is not installed.
+            TypeError: If ``ee_object`` is not a supported Earth Engine object.
+            ValueError: If Earth Engine returns no usable tile URL or opacity
+                is outside the range 0--1.
+
+        Note:
+            The generated tile URL is tied to the Earth Engine map ID. A saved
+            project may need the layer to be regenerated after that map ID
+            expires.
+        """
+        try:
+            opacity_value = float(opacity)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("opacity must be a finite number between 0 and 1") from exc
+        if not math.isfinite(opacity_value) or not 0 <= opacity_value <= 1:
+            raise ValueError("opacity must be a finite number between 0 and 1")
+
+        params = dict(vis_params or {})
+        map_object = ee_object
+        map_params = params
+
+        if not callable(getattr(map_object, "getMapId", None)):
+            try:
+                import ee
+            except ImportError as exc:
+                raise ImportError(
+                    "Adding this Earth Engine object requires the `earthengine-api` "
+                    "package. Install it with `pip install earthengine-api`."
+                ) from exc
+
+            if isinstance(map_object, ee.ImageCollection):
+                map_object = map_object.mosaic()
+            elif isinstance(map_object, (ee.FeatureCollection, ee.Feature, ee.Geometry)):
+                if isinstance(map_object, ee.Geometry):
+                    map_object = ee.Feature(map_object)
+                if isinstance(map_object, ee.Feature):
+                    map_object = ee.FeatureCollection([map_object])
+                vector_style = {
+                    "color": "000000",
+                    "fillColor": "00000000",
+                    "width": 2,
+                    "pointSize": 3,
+                    "pointShape": "circle",
+                    **params,
+                }
+                map_object = map_object.style(**vector_style)
+                map_params = {}
+            elif not isinstance(map_object, ee.Image):
+                raise TypeError(
+                    "ee_object must be an Earth Engine Image, ImageCollection, "
+                    "FeatureCollection, Feature, or Geometry"
+                )
+
+        try:
+            map_id = map_object.getMapId(map_params)
+        except Exception as exc:
+            raise RuntimeError(
+                "Earth Engine could not create map tiles. Authenticate and initialize "
+                "Earth Engine before calling add_ee_layer()."
+            ) from exc
+
+        tile_fetcher = map_id.get("tile_fetcher") if isinstance(map_id, dict) else None
+        tile_url = getattr(tile_fetcher, "url_format", None)
+        if not tile_url and isinstance(map_id, dict):
+            tile_url = map_id.get("tile_url") or map_id.get("url_format")
+        if not isinstance(tile_url, str) or not tile_url:
+            raise ValueError("Earth Engine returned a map ID without a tile URL")
+
+        layer = _project.tile_layer(
+            name,
+            tile_url,
+            attribution="Google Earth Engine",
+        )
+        layer["visible"] = bool(shown)
+        layer["opacity"] = opacity_value
+        layer["metadata"]["provider"] = "earth-engine"
+        if isinstance(map_id, dict) and map_id.get("mapid"):
+            layer["metadata"]["earthEngineMapId"] = map_id["mapid"]
+        return self._add_layer(layer)
+
     @staticmethod
     def _resolve_raster_source(source: Any) -> str:
         """Resolve a raster source to a URL the in-iframe app can fetch.

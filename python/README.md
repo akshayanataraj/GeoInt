@@ -44,6 +44,10 @@ m.add_tile_layer(
     attribution="(c) OpenStreetMap contributors",
 )
 m.add_cog("https://example.com/dem.tif", name="DEM", colormap="terrain")
+
+import ee
+ee.Initialize(project="your-google-cloud-project")
+m.add_ee_layer(ee.Image("USGS/SRTMGL1_003"), {"min": 0, "max": 3000}, name="SRTM")
 m.add_basemap("dark")
 m.set_center(-120, 47, zoom=8)
 ```
@@ -74,6 +78,7 @@ m.to_project()["mapView"]["center"]
 | `add_vector_tiles(url, name=, source_layers=, source_layer=, **style)` | Add vector tiles from a TileJSON endpoint. |
 | `add_pmtiles(url, name=, tile_type=, source_layers=, **style)` | Add a PMTiles archive (vector or raster). |
 | `add_tile_layer(url, name=, tile_size=, attribution=)` | Add a raster XYZ tile layer. |
+| `add_ee_layer(ee_object, vis_params=, name=, shown=, opacity=)` | Add an authenticated Google Earth Engine object as raster tiles. |
 | `add_wms(endpoint, layers, name=, styles=, image_format=, transparent=, tile_size=, **style)` | Add a WMS (GetMap) tiled raster layer. |
 | `add_wmts(url, name=, tile_size=, **style)` | Add a WMTS tile URL template. |
 | `add_wfs(endpoint, type_name, name=, version=, output_format=, srs_name=, max_features=, **style)` | Add a WFS layer (GeoJSON, fetched and inlined). |

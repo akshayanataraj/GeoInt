@@ -70,6 +70,115 @@ def test_add_wmts(m):
     assert _last_layer(m)["type"] == "wmts"
 
 
+def test_add_ee_layer_from_map_id(m):
+    class TileFetcher:
+        url_format = "https://earthengine.googleapis.com/maps/test/tiles/{z}/{x}/{y}"
+
+    class Image:
+        def getMapId(self, vis_params):
+            assert vis_params == {"min": 0, "max": 3000, "palette": ["blue", "green"]}
+            return {"mapid": "test-map", "tile_fetcher": TileFetcher()}
+
+    layer_id = m.add_ee_layer(
+        Image(),
+        {"min": 0, "max": 3000, "palette": ["blue", "green"]},
+        name="Elevation",
+        shown=False,
+        opacity=0.4,
+    )
+    layer = _last_layer(m)
+    assert layer["id"] == layer_id
+    assert layer["name"] == "Elevation"
+    assert layer["type"] == "xyz"
+    assert layer["visible"] is False
+    assert layer["opacity"] == 0.4
+    assert layer["source"]["tiles"] == [TileFetcher.url_format]
+    assert layer["source"]["attribution"] == "Google Earth Engine"
+    assert layer["metadata"]["sourceKind"] == "xyz-url"
+    assert layer["metadata"]["provider"] == "earth-engine"
+    assert layer["metadata"]["earthEngineMapId"] == "test-map"
+
+
+@pytest.mark.parametrize("opacity", [-0.1, 1.1, float("nan"), "bad"])
+def test_add_ee_layer_rejects_invalid_opacity(m, opacity):
+    with pytest.raises(ValueError, match="opacity must"):
+        m.add_ee_layer(object(), opacity=opacity)
+
+
+def test_add_ee_layer_requires_tile_url(m):
+    class Image:
+        def getMapId(self, _vis_params):
+            return {"mapid": "missing-fetcher"}
+
+    with pytest.raises(ValueError, match="without a tile URL"):
+        m.add_ee_layer(Image())
+
+
+def test_add_ee_layer_wraps_earth_engine_errors(m):
+    class Image:
+        def getMapId(self, _vis_params):
+            raise RuntimeError("not initialized")
+
+    with pytest.raises(RuntimeError, match="Authenticate and initialize"):
+        m.add_ee_layer(Image())
+
+
+def test_add_ee_layer_mosaics_image_collection(monkeypatch, m):
+    class TileFetcher:
+        url_format = "https://earthengine.googleapis.com/maps/collection/tiles/{z}/{x}/{y}"
+
+    class Image:
+        def getMapId(self, vis_params):
+            assert vis_params == {"bands": ["B4", "B3", "B2"]}
+            return {"tile_fetcher": TileFetcher()}
+
+    class ImageCollection:
+        def mosaic(self):
+            return Image()
+
+    fake_ee = types.SimpleNamespace(
+        Image=Image,
+        ImageCollection=ImageCollection,
+        FeatureCollection=type("FeatureCollection", (), {}),
+        Feature=type("Feature", (), {}),
+        Geometry=type("Geometry", (), {}),
+    )
+    monkeypatch.setitem(sys.modules, "ee", fake_ee)
+    m.add_ee_layer(ImageCollection(), {"bands": ["B4", "B3", "B2"]})
+    assert _last_layer(m)["source"]["tiles"] == [TileFetcher.url_format]
+
+
+def test_add_ee_layer_styles_feature_collection(monkeypatch, m):
+    captured = {}
+
+    class TileFetcher:
+        url_format = "https://earthengine.googleapis.com/maps/features/tiles/{z}/{x}/{y}"
+
+    class Image:
+        def getMapId(self, vis_params):
+            captured["map_params"] = vis_params
+            return {"tile_fetcher": TileFetcher()}
+
+    class FeatureCollection:
+        def style(self, **style):
+            captured["style"] = style
+            return Image()
+
+    fake_ee = types.SimpleNamespace(
+        Image=Image,
+        ImageCollection=type("ImageCollection", (), {}),
+        FeatureCollection=FeatureCollection,
+        Feature=type("Feature", (), {}),
+        Geometry=type("Geometry", (), {}),
+    )
+    monkeypatch.setitem(sys.modules, "ee", fake_ee)
+    m.add_ee_layer(FeatureCollection(), {"color": "ff0000", "width": 4})
+    assert captured["style"]["color"] == "ff0000"
+    assert captured["style"]["width"] == 4
+    assert captured["style"]["fillColor"] == "00000000"
+    assert captured["map_params"] == {}
+
+
 def test_add_raster_is_cog(m):
     m.add_raster("https://e/dem.tif", bands=[1, 2, 3])
     layer = _last_layer(m)
