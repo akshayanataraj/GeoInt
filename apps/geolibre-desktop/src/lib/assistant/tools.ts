@@ -206,6 +206,18 @@ function concatBytes(chunks: Uint8Array[], total: number): Uint8Array {
   return out;
 }
 
+/**
+ * An id for a layer a tool creates. `crypto.randomUUID` needs a secure
+ * context, which a self-hosted GeoLibre served over plain http is not, so
+ * fall back to something unique enough for one session rather than throwing
+ * (see `packages/plugins/src/layer-ids.ts`'s `createLayerId`, same rationale).
+ */
+function createToolLayerId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 /** Detect a layer's geometry family from its first feature. */
 function geometryTypeOf(layer: GeoLibreLayer): string | null {
   return layer.geojson?.features?.[0]?.geometry?.type ?? null;
@@ -548,7 +560,7 @@ export function createAssistantTools(deps: AssistantToolDeps): InvokableTool<unk
       }
       const tileUrl = createXyzTileUrlTemplate(url);
       const layer: GeoLibreLayer = {
-        id: crypto.randomUUID(),
+        id: createToolLayerId(),
         name: name || "Tile layer",
         type: "xyz",
         source: {
@@ -1025,7 +1037,7 @@ export function createAssistantTools(deps: AssistantToolDeps): InvokableTool<unk
       const tileUrl = new TiTilerClient().getItemTileUrl(input.collection, item.id, preset?.params);
       const bounds = bbox2d(item.bbox);
       const layer: GeoLibreLayer = {
-        id: crypto.randomUUID(),
+        id: createToolLayerId(),
         name: input.name?.trim() || `${input.collection} ${item.properties.datetime ?? item.id}`,
         type: "xyz",
         source: {

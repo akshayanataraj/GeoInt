@@ -1,12 +1,6 @@
 /**
  * Raster basemaps for regions the default catalog does not serve well.
  *
- * Today that means mainland China: GeoLibre's defaults (OpenFreeMap, Protomaps)
- * and almost every provider in the Basemaps control are hosted outside it with
- * no presence inside, so from there they range from slow to unreachable. These
- * entries are served from inside China and give those users a basemap that
- * loads.
- *
  * The mechanism mirrors {@link PlanetaryBasemap}: `styleUrl` is a
  * `geolibre://regional-basemap/<id>` sentinel that the map controller's
  * `resolveMapStyle` expands into a raster style at apply time (it is not a
@@ -20,7 +14,7 @@
  * heading and explanatory note inside the single "Regional" section, so a
  * future region slots in without the section itself becoming country-specific.
  */
-export type RegionalBasemapRegionId = "china";
+export type RegionalBasemapRegionId = "india";
 
 /**
  * A raster basemap for a region, rendered from XYZ (or TMS) tiles.
@@ -56,101 +50,62 @@ export interface RegionalBasemap {
   /** Attribution shown on the map. */
   attribution: string;
   /**
-   * True when the tiles are drawn in GCJ-02, the offset datum Chinese law
-   * mandates for public map services. Neither GeoLibre nor MapLibre applies the
-   * shift, so WGS84 data laid over these lands roughly 100 to 700 m off (see
-   * docs/getting-started.md). Not every regional basemap is offset — Tianditu
-   * publishes in CGCS2000 and lines up — so this records which are, rather than
-   * leaving a caveat that applies to some entries implied by the region.
+   * True when the tiles are drawn in GCJ-02, an offset datum some
+   * jurisdictions mandate for public map services. Neither GeoLibre nor
+   * MapLibre applies the shift, so WGS84 data laid over such a basemap would
+   * land roughly 100 to 700 m off (see docs/getting-started.md).
    */
   gcj02?: boolean;
 }
 
 export const REGIONAL_BASEMAP_SENTINEL_PREFIX = "geolibre://regional-basemap/";
 
-const AMAP_ATTRIBUTION = '&copy; <a href="https://www.amap.com">高德地图 Amap</a>';
-const TENCENT_ATTRIBUTION = '&copy; <a href="https://map.qq.com">腾讯地图 Tencent Maps</a>';
-
 const sentinel = (id: string) => `${REGIONAL_BASEMAP_SENTINEL_PREFIX}${id}`;
 
-// Amap serves each product from four numbered hosts; MapLibre takes a single
-// template per source, so pin host 01. Browsers multiplex over HTTP/2, which
-// makes the sharding a non-issue. `style` selects the product: 7 street, 6
-// imagery, 8 roads-and-labels.
-const AMAP_STREET_URL =
-  "https://wprd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scl=1&style=7&x={x}&y={y}&z={z}";
-const AMAP_SATELLITE_URL = "https://webst01.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}";
-const AMAP_LABELS_URL = "https://webst01.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}";
+const GOOGLE_MAPS_ATTRIBUTION = '&copy; <a href="https://www.google.com/maps">Google Maps</a>';
 
-const tencentUrl = (styleId: number) =>
-  `https://rt0.map.gtimg.com/tile?z={z}&x={x}&y={y}&styleid=${styleId}&scene=0`;
+// The classic `mt#.google.com/vt` tile endpoint is undocumented and not the
+// official, billed Google Maps Platform API -- unauthorized use of it is a
+// real Terms of Service risk for a production deployment (see
+// UI_REPURPOSE_PLAN.md for the fuller writeup; a sibling project in this same
+// effort removed an identical entry for exactly this reason). Kept here as a
+// deliberate, informed choice for this deployment rather than an oversight.
+// `gl=in` is the undocumented region-bias parameter some integrations use to
+// request India's officially depicted borders (e.g. the full extent of
+// Jammu & Kashmir); it is not a documented, guaranteed contract, so treat the
+// border rendering as best-effort, not authoritative.
+const GOOGLE_ROADMAP_URL = "https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=en&gl=in";
+// `lyrs=y` is Google's "hybrid" layer: satellite imagery with roads/labels
+// burnt in, in one tile request (unlike Amap's old two-source overlay
+// pattern above, this provider composites both itself). Chosen as the
+// product default for a photorealistic look (see UI_REPURPOSE_PLAN.md §2a)
+// while keeping place names/roads legible on top of real imagery.
+const GOOGLE_HYBRID_URL = "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}&hl=en&gl=in";
 
-/**
- * Basemaps served from inside mainland China.
- *
- * Zoom limits are each source's probed maximum, so MapLibre overzooms (blurs)
- * rather than painting a placeholder: Amap's imagery returns a "no imagery"
- * tile rather than a 404 past zoom 18, and Tencent 400s past 19 with zoom 19
- * already blank.
- */
-export const CHINA_BASEMAPS: readonly RegionalBasemap[] = [
+/** Basemaps that render India's officially depicted borders. */
+export const INDIA_BASEMAPS: readonly RegionalBasemap[] = [
   {
-    id: "amap-street",
-    region: "china",
-    name: "高德地图",
-    styleUrl: sentinel("amap-street"),
-    tileUrl: AMAP_STREET_URL,
-    maxZoom: 19,
-    attribution: AMAP_ATTRIBUTION,
-    gcj02: true,
+    id: "google-hybrid",
+    region: "india",
+    name: "Google Maps (Satellite)",
+    styleUrl: sentinel("google-hybrid"),
+    tileUrl: GOOGLE_HYBRID_URL,
+    maxZoom: 20,
+    attribution: GOOGLE_MAPS_ATTRIBUTION,
   },
   {
-    id: "amap-satellite",
-    region: "china",
-    name: "高德卫星",
-    styleUrl: sentinel("amap-satellite"),
-    tileUrl: AMAP_SATELLITE_URL,
-    maxZoom: 18,
-    attribution: AMAP_ATTRIBUTION,
-    gcj02: true,
-  },
-  {
-    id: "amap-hybrid",
-    region: "china",
-    name: "高德混合",
-    styleUrl: sentinel("amap-hybrid"),
-    tileUrl: AMAP_SATELLITE_URL,
-    overlayTileUrl: AMAP_LABELS_URL,
-    maxZoom: 18,
-    attribution: AMAP_ATTRIBUTION,
-    gcj02: true,
-  },
-  {
-    id: "tencent-street",
-    region: "china",
-    name: "腾讯地图",
-    styleUrl: sentinel("tencent-street"),
-    tileUrl: tencentUrl(1),
-    scheme: "tms",
-    maxZoom: 18,
-    attribution: TENCENT_ATTRIBUTION,
-    gcj02: true,
-  },
-  {
-    id: "tencent-dark",
-    region: "china",
-    name: "腾讯深色",
-    styleUrl: sentinel("tencent-dark"),
-    tileUrl: tencentUrl(4),
-    scheme: "tms",
-    maxZoom: 18,
-    attribution: TENCENT_ATTRIBUTION,
-    gcj02: true,
+    id: "google-roadmap",
+    region: "india",
+    name: "Google Maps",
+    styleUrl: sentinel("google-roadmap"),
+    tileUrl: GOOGLE_ROADMAP_URL,
+    maxZoom: 20,
+    attribution: GOOGLE_MAPS_ATTRIBUTION,
   },
 ];
 
 /** Every regional basemap, across all regions. */
-export const REGIONAL_BASEMAPS: readonly RegionalBasemap[] = CHINA_BASEMAPS;
+export const REGIONAL_BASEMAPS: readonly RegionalBasemap[] = INDIA_BASEMAPS;
 
 /**
  * The regional basemaps grouped for display, one entry per region. Both the New
@@ -161,7 +116,7 @@ export const REGIONAL_BASEMAPS: readonly RegionalBasemap[] = CHINA_BASEMAPS;
 export const REGIONAL_BASEMAP_GROUPS: readonly {
   id: RegionalBasemapRegionId;
   basemaps: readonly RegionalBasemap[];
-}[] = [{ id: "china", basemaps: CHINA_BASEMAPS }];
+}[] = [{ id: "india", basemaps: INDIA_BASEMAPS }];
 
 /** Look up a regional basemap by its `geolibre://regional-basemap/<id>` sentinel. */
 export function getRegionalBasemapByStyleUrl(

@@ -1,3 +1,4 @@
+import "./lib/crypto-random-uuid-polyfill";
 import "./lib/symbol-dispose-polyfill";
 // Must precede any Map construction (see the module docs).
 import "./lib/maplibre-worker";
@@ -48,14 +49,6 @@ import "./lib/swipe-style";
 import { registerSW } from "virtual:pwa-register";
 import { TooltipProvider } from "@geolibre/ui";
 import { I18nextProvider } from "react-i18next";
-import type { ReactNode } from "react";
-// Puts a deep link's query back after a sign-in redirect dropped it. This import
-// MUST stay above `./i18n` below: it does its work while loading, and `./i18n`
-// resolves the UI language from the query string while *it* loads, so a later
-// position would restore the parameters after they had already been read. Same
-// for the theme, resolved further down this file. A no-op when no sign-in
-// redirect is in flight, so every other build just pays for an empty module.
-import "./lib/auth-return-url-boot";
 // Initializes i18next (resolves the UI language from the `?locale`/`?lang` query
 // param, stored settings, or the browser) before React renders, so the first
 // paint is already in the right language. English is bundled; other locales are
@@ -66,8 +59,6 @@ import { startAnalytics } from "./lib/analytics";
 import { installDiagnosticsCapture } from "./lib/diagnostics";
 import { isTauri } from "./lib/is-tauri";
 import { installStaleChunkReload } from "./lib/stale-chunk-reload";
-import { resolveAuthGate, type AuthGateConfig } from "./lib/auth-gate";
-import { getInitialThemeMode } from "./hooks/useThemeMode";
 import { applyTemporaryDesktopSettings } from "./hooks/useDesktopSettings";
 import {
   desktopSettingsUrl,
@@ -89,18 +80,6 @@ if (isTauri()) {
       // CORS-buggy path this fixes), so surface it rather than let it become a
       // silent unhandled rejection.
       console.error("[GeoLibre] Failed to install native geocoding fetch", error);
-    });
-  // Likewise route share.geolibre.app (project Share + gallery) through the
-  // native HTTP client: the share server's CORS policy allows the web origin but
-  // not the Tauri WebView origin, so a browser fetch fails as "Could not reach
-  // share.geolibre.app." Lazy + desktop-only so web/embedded never import the
-  // Tauri HTTP plugin.
-  void import("./lib/share-fetch")
-    .then(({ installNativeShareFetch }) => installNativeShareFetch())
-    .catch((error: unknown) => {
-      // On failure the share client stays on the browser fetch (the CORS-blocked
-      // path this fixes); surface it rather than swallow the rejection.
-      console.error("[GeoLibre] Failed to install native share fetch", error);
     });
   // GeoLens sends X-Api-Key, which preflights in a WebView. Keep the built-in
   // datasets.geolibre.app connection working even when its CORS origin
@@ -124,44 +103,6 @@ const isHostedWebApp = !isTauri() && !__GEOLIBRE_EMBED_BUILD__;
 // the geolibre.app and web.geolibre.app Pages deploys are, see analytics.ts).
 // A no-op in every other build, so nothing is loaded and nothing is sent.
 startAnalytics(isHostedWebApp);
-// Clerk or Auth0, whichever this deployment configured (neither, normally).
-const authGate = resolveAuthGate(isHostedWebApp);
-if (authGate) {
-  // Apply the initial theme now rather than leaving it to <App />. A gate paints
-  // a full-screen signed-out page *before* App mounts, and App is where
-  // useThemeMode adds the `dark` class — so without this a dark-mode visitor
-  // gets a white sign-in screen that flips to dark only after signing in. This
-  // sets exactly what useThemeMode's layout effect will set a moment later
-  // (same helper, same `?theme=` handling), so it is a no-op once App mounts.
-  const initialTheme = getInitialThemeMode();
-  document.documentElement.classList.toggle("dark", initialTheme === "dark");
-  document.documentElement.style.colorScheme = initialTheme;
-}
-
-/**
- * Load the configured gate's chunk and return a wrapper for the app tree.
- *
- * Each provider lives in its own dynamically imported module, so a deployment
- * downloads only the SDK it actually uses — and an ungated build downloads
- * neither. Returns null when no gate is configured.
- */
-function loadAuthGate(
-  config: AuthGateConfig | undefined,
-): Promise<((children: ReactNode) => ReactNode) | null> {
-  if (!config) return Promise.resolve(null);
-  if (config.provider === "clerk") {
-    return import("./components/auth/ClerkGate").then(({ ClerkGate }) => (children: ReactNode) => (
-      <ClerkGate publishableKey={config.publishableKey} waitlist={config.waitlist}>
-        {children}
-      </ClerkGate>
-    ));
-  }
-  return import("./components/auth/Auth0Gate").then(({ Auth0Gate }) => (children: ReactNode) => (
-    <Auth0Gate domain={config.domain} clientId={config.clientId}>
-      {children}
-    </Auth0Gate>
-  ));
-}
 // Register the offline/PWA service worker (web build only). `registerSW` is a
 // no-op stub in the Tauri desktop and embedded Jupyter builds, where the plugin
 // is disabled (see vite.config.ts pwaPlugin).
@@ -240,19 +181,18 @@ const startupLanguageReady = Promise.all([i18nReady, sharedSettingsReady]).then(
 void Promise.all([
   import("./App"),
   import("./components/common/error-boundaries"),
-  loadAuthGate(authGate),
   // Gate the first render on i18next being initialized with the active locale's
   // (lazily loaded) catalog, so the UI never paints raw translation keys.
   startupLanguageReady,
 ])
-  .then(([{ default: App }, { AppErrorBoundary }, withAuthGate]) => {
-    const app = <App />;
-    const authenticatedApp = withAuthGate ? withAuthGate(app) : app;
+  .then(([{ default: App }, { AppErrorBoundary }]) => {
     ReactDOM.createRoot(document.getElementById("root")!).render(
       <React.StrictMode>
         <I18nextProvider i18n={i18n}>
           <AppErrorBoundary>
-            <TooltipProvider delayDuration={200}>{authenticatedApp}</TooltipProvider>
+            <TooltipProvider delayDuration={200}>
+              <App />
+            </TooltipProvider>
           </AppErrorBoundary>
         </I18nextProvider>
       </React.StrictMode>,

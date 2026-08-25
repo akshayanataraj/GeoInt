@@ -1,8 +1,12 @@
-import { DirectionProvider } from "@geolibre/ui";
+import { useAppStore } from "@geolibre/core";
+import { cn, DirectionProvider } from "@geolibre/ui";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useCallback, useState } from "react";
+import { AuthGate } from "./components/layout/AuthGate";
 import { DesktopShell } from "./components/layout/DesktopShell";
+import { ModeDock } from "./components/layout/ModeDock";
+import { ModeScreen } from "./components/layout/ModeScreen";
 import { OnboardingDialog } from "./components/layout/OnboardingDialog";
 import { UpdateNotificationModal } from "./components/layout/UpdateNotificationModal";
 import { useDesktopSettingsPersistence } from "./hooks/useDesktopSettings";
@@ -28,6 +32,7 @@ import { languageDirection } from "./i18n/languages";
 
 export default function App() {
   useLastBasemapPersistence();
+  const activeMode = useAppStore((s) => s.ui.activeMode);
   // Re-renders on language change, so Radix primitives (menus, sliders, tabs)
   // pick up the right-to-left direction together with the document `dir`.
   const { i18n, t } = useTranslation();
@@ -60,6 +65,7 @@ export default function App() {
   useWhiteboxToolUrl();
   return (
     <DirectionProvider dir={languageDirection(i18n.language)}>
+      <AuthGate>
       {restoringStartupProject ? (
         // The shell is deliberately unmounted while the startup project loads
         // (see `useStartupProject`), so say what the window is waiting on rather
@@ -74,18 +80,48 @@ export default function App() {
         </div>
       ) : (
         <>
-          <DesktopShell
-            layoutOptions={layoutOptions}
-            projectUrlLoadState={projectUrlLoadState}
-            dataUrlLoadState={dataUrlLoadState}
-            mapAppAPI={mapAppAPI}
-            themeMode={themeMode}
-            onToggleThemeMode={toggleThemeMode}
-            onMapReady={handleMapReady}
-          />
+          <div className="flex h-screen w-screen flex-row overflow-hidden">
+            {/* A real flex column, not an overlay: it reserves its own width, so it
+                cannot visually collide with anything DesktopShell docks at its
+                own edges (Layers/Browser panels, the map's own controls). */}
+            <ModeDock />
+            <div className="relative min-h-0 flex-1">
+              {/* DesktopShell stays mounted across every mode switch -- unmounting
+                  it would tear down the live MapLibre instance and every layer/
+                  panel state it holds. Non-"map" modes just hide it (opacity +
+                  inert to input/AT) behind the placeholder screen instead. */}
+              <div
+                className={cn(
+                  "absolute inset-0 transition-opacity duration-200 ease-out motion-reduce:transition-none",
+                  activeMode === "map" ? "opacity-100" : "pointer-events-none opacity-0",
+                )}
+                aria-hidden={activeMode !== "map"}
+                inert={activeMode !== "map" ? true : undefined}
+              >
+                <DesktopShell
+                  layoutOptions={layoutOptions}
+                  projectUrlLoadState={projectUrlLoadState}
+                  dataUrlLoadState={dataUrlLoadState}
+                  mapAppAPI={mapAppAPI}
+                  themeMode={themeMode}
+                  onToggleThemeMode={toggleThemeMode}
+                  onMapReady={handleMapReady}
+                />
+              </div>
+              {activeMode !== "map" ? (
+                <div
+                  key={activeMode}
+                  className="geoint-mode-fade-in absolute inset-0 motion-reduce:animate-none"
+                >
+                  <ModeScreen mode={activeMode} />
+                </div>
+              ) : null}
+            </div>
+          </div>
           <OnboardingDialog open={showOnboarding} onClose={dismissOnboarding} />
         </>
       )}
+      </AuthGate>
       <UpdateNotificationModal
         pending={pendingUpdate}
         onRemindLater={remindLater}

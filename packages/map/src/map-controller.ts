@@ -281,7 +281,9 @@ function resolveMapStyle(styleUrl: string | undefined): string | maplibregl.Styl
     console.warn(
       `Offline basemap "${styleUrl}" is not available in this session; falling back to the default basemap.`,
     );
-    return DEFAULT_BASEMAP;
+    // DEFAULT_BASEMAP may itself be a sentinel (e.g. a regional basemap), so
+    // resolve it rather than handing MapLibre an unfetchable geolibre:// URL.
+    return resolveMapStyle(DEFAULT_BASEMAP);
   }
   const planetary = getPlanetaryBasemapByStyleUrl(styleUrl);
   if (planetary) return createPlanetaryMapStyle(planetary);
@@ -291,7 +293,7 @@ function resolveMapStyle(styleUrl: string | undefined): string | maplibregl.Styl
   // map. Fall back to the default basemap instead.
   if (styleUrl?.startsWith(PLANETARY_BASEMAP_SENTINEL_PREFIX)) {
     console.warn(`Unknown planetary basemap "${styleUrl}"; falling back to the default basemap.`);
-    return DEFAULT_BASEMAP;
+    return resolveMapStyle(DEFAULT_BASEMAP);
   }
   const regional = getRegionalBasemapByStyleUrl(styleUrl);
   if (regional) return createRegionalMapStyle(regional);
@@ -299,9 +301,9 @@ function resolveMapStyle(styleUrl: string | undefined): string | maplibregl.Styl
   // resolves must not be handed to MapLibre as a style URL.
   if (isRegionalBasemapSentinel(styleUrl)) {
     console.warn(`Unknown regional basemap "${styleUrl}"; falling back to the default basemap.`);
-    return DEFAULT_BASEMAP;
+    return resolveMapStyle(DEFAULT_BASEMAP);
   }
-  return styleUrl ?? DEFAULT_BASEMAP;
+  return styleUrl ?? resolveMapStyle(DEFAULT_BASEMAP);
 }
 
 /**

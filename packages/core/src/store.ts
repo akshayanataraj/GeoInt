@@ -29,6 +29,8 @@ import {
   reorderLayerGroupInPanel,
 } from "./layer-groups";
 import {
+  type AppMode,
+  DEFAULT_APP_MODE,
   DEFAULT_BASEMAP,
   DEFAULT_DASHBOARD_COLUMNS,
   DEFAULT_LAYER_STYLE,
@@ -305,6 +307,8 @@ export interface AppState {
   // history (partialize never lists it).
   collaboration: CollaborationState;
   ui: {
+    /** Which single-screen mode is active (UI_REPURPOSE_PLAN.md §2). Not a route. */
+    activeMode: AppMode;
     processingOpen: boolean;
     /**
      * Tool id to preselect when the Whitebox toolbox dialog opens, set when the
@@ -327,7 +331,6 @@ export interface AppState {
     // is opened from a layer's context menu, or null when opened without a target.
     loadEditorFeaturesLayerId: string | null;
     pythonConsoleOpen: boolean;
-    notebookOpen: boolean;
     assistantOpen: boolean;
     attributeTableOpen: boolean;
     /** Whether the Raster Attribute Table bottom panel is open (issue #1307). */
@@ -448,6 +451,7 @@ export interface AppState {
   selectFeatures: (ids: string[], anchorId?: string | null) => void;
   setIdentifyLayer: (id: string | null) => void;
   setAttributeFilter: (filter: string) => void;
+  setActiveMode: (mode: AppMode) => void;
   setProcessingOpen: (open: boolean) => void;
   setProcessingInitialTool: (toolId: string | null) => void;
   setConversionOpen: (kind: ConversionToolKind | null) => void;
@@ -462,7 +466,6 @@ export interface AppState {
   setSqlWorkspaceOpen: (open: boolean) => void;
   setLoadEditorFeaturesOpen: (open: boolean, layerId?: string | null) => void;
   setPythonConsoleOpen: (open: boolean) => void;
-  setNotebookOpen: (open: boolean) => void;
   setAssistantOpen: (open: boolean) => void;
   setAttributeTableOpen: (open: boolean) => void;
   setRasterAttributeTableOpen: (open: boolean) => void;
@@ -1046,6 +1049,7 @@ export const useAppStore = create<AppState>()(
       attributeFilter: "",
       collaboration: DEFAULT_COLLABORATION_STATE,
       ui: {
+        activeMode: DEFAULT_APP_MODE,
         processingOpen: false,
         processingInitialTool: null,
         conversionOpen: null,
@@ -1061,7 +1065,6 @@ export const useAppStore = create<AppState>()(
         loadEditorFeaturesOpen: false,
         loadEditorFeaturesLayerId: null,
         pythonConsoleOpen: false,
-        notebookOpen: false,
         assistantOpen: false,
         attributeTableOpen: false,
         rasterAttributeTableOpen: false,
@@ -1343,6 +1346,7 @@ export const useAppStore = create<AppState>()(
         }),
       setIdentifyLayer: (id) => set({ identifyLayerId: id }),
       setAttributeFilter: (filter) => set({ attributeFilter: filter }),
+      setActiveMode: (mode) => set((s) => ({ ui: { ...s.ui, activeMode: mode } })),
       setProcessingOpen: (open) => set((s) => ({ ui: { ...s.ui, processingOpen: open } })),
       setProcessingInitialTool: (toolId) =>
         set((s) => ({ ui: { ...s.ui, processingInitialTool: toolId } })),
@@ -1379,7 +1383,6 @@ export const useAppStore = create<AppState>()(
           },
         })),
       setPythonConsoleOpen: (open) => set((s) => ({ ui: { ...s.ui, pythonConsoleOpen: open } })),
-      setNotebookOpen: (open) => set((s) => ({ ui: { ...s.ui, notebookOpen: open } })),
       setAssistantOpen: (open) => set((s) => ({ ui: { ...s.ui, assistantOpen: open } })),
       setAttributeTableOpen: (open) => set((s) => ({ ui: { ...s.ui, attributeTableOpen: open } })),
       setRasterAttributeTableOpen: (open) =>

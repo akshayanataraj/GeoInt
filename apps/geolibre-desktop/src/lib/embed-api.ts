@@ -15,9 +15,28 @@
 import type { Feature, Geometry } from "geojson";
 import { LAYER_TYPES, hasRestorableLayerSource, validateMapExpression } from "@geolibre/core";
 import type { GeoLibreLayer } from "@geolibre/core";
-import { EMBED_API_SOURCE, EMBED_API_VERSION, type AddLayerSpec } from "@geolibre/embed";
 
-export { EMBED_API_SOURCE, EMBED_API_VERSION };
+// These three were previously imported from `@geolibre/embed` (the typed SDK
+// for a *host* page driving a framed GeoLibre). That package is a separate
+// concern from this module -- being embeddable at all, which this app still
+// is -- so the protocol version/source tag and the payload shape are inlined
+// here rather than reintroducing a dependency on the deleted SDK package.
+/** Current embed iframe protocol version. Version 1 requests remain supported by the app. */
+export const EMBED_API_VERSION = 2 as const;
+export const EMBED_API_SOURCE = "geolibre" as const;
+
+export interface AddLayerSpec {
+  id: string;
+  name: string;
+  type: string;
+  source: Record<string, unknown>;
+  visible?: boolean;
+  opacity?: number;
+  style?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  geojson?: unknown;
+  beforeId?: string;
+}
 /** Versions understood by the app. V1 remains accepted for existing hosts. */
 export const SUPPORTED_EMBED_API_VERSIONS = [1, EMBED_API_VERSION] as const;
 

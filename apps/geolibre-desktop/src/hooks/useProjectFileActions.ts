@@ -40,10 +40,6 @@ import { useDesktopSettingsStore } from "./useDesktopSettings";
 import { buildProjectHtml } from "../lib/html-export";
 import { ensureHtmlFileName, ensureProjectFileName } from "../lib/file-names";
 import { mergeStringLists } from "../lib/string-lists";
-import { fetchProjectFromUrl } from "../lib/project-url";
-import { getShareFetch } from "../lib/share-fetch";
-import { resolveShareBaseUrl } from "../lib/share-geolibre";
-import { shareAuthorizedFetch } from "../lib/share-gallery";
 import { normalizeProjectUrl } from "../lib/urls";
 import { recordExplicitProjectSave } from "../lib/project-history-session";
 import {
@@ -606,25 +602,15 @@ export function useProjectFileActions(mapControllerRef: MapControllerRef) {
     }
   };
 
-  // Load a project directly from a known URL (e.g. a Project Gallery card's raw
-  // JSON URL), bypassing the URL-input dialog. Mirrors handleOpenFromUrl's
-  // fetch → resolve → loadProject flow but takes the URL as an argument and
-  // rethrows on failure so the caller (the gallery dialog) can show the error
-  // inline next to the card it came from.
-  //
-  // When `authToken` is set (the user has a share API token), the request to the
-  // share host carries it as a Bearer token so the owner's unlisted and private
-  // projects load too. The token is attached only for the share host (see
-  // shareAuthorizedFetch), never to third-party hosts a project might reference —
-  // so when no share host is configured, the plain fetch is used and the token is
-  // simply not sent anywhere. Token-authenticated opens are not remembered as
-  // recent (path = null), since reopening a private URL on restart would 403
-  // without the header.
+  // Load a project directly from a known URL, bypassing the URL-input dialog.
+  // Mirrors handleOpenFromUrl's fetch → resolve → loadProject flow but takes
+  // the URL as an argument and rethrows on failure so the caller can show the
+  // error inline next to wherever the URL came from.
   const [saveTemplateDialogOpen, setSaveTemplateDialogOpen] = useState(false);
 
   const openProjectFromShareUrl = async (
     url: string,
-    options: { authToken?: string; asCopy?: boolean } = {},
+    options: { asCopy?: boolean } = {},
   ): Promise<void> => {
     const normalizedUrl = normalizeProjectUrl(url);
     if (!normalizedUrl) {
@@ -636,25 +622,8 @@ export function useProjectFileActions(mapControllerRef: MapControllerRef) {
     shareUrlAbortRef.current = controller;
 
     try {
-      let project: Awaited<ReturnType<typeof resolveProjectXyzLayers>>;
-      // One decision drives both the fetch and whether the URL is remembered: a
-      // token is only actually sent when there is a share host to send it to, and
-      // an unauthenticated open of a public URL should still be remembered.
-      const shareBaseUrl = resolveShareBaseUrl();
-      const shareAuth =
-        options.authToken && shareBaseUrl
-          ? { token: options.authToken, baseUrl: shareBaseUrl }
-          : null;
-      if (shareAuth) {
-        const fetched = await fetchProjectFromUrl(normalizedUrl, {
-          signal: controller.signal,
-          fetchImpl: shareAuthorizedFetch(shareAuth.token, shareAuth.baseUrl, getShareFetch()),
-        });
-        project = await resolveProjectXyzLayers(fetched, controller.signal);
-      } else {
-        const result = await openRecentProjectFile(normalizedUrl, controller.signal);
-        project = await resolveProjectXyzLayers(result.project, controller.signal);
-      }
+      const result = await openRecentProjectFile(normalizedUrl, controller.signal);
+      const project = await resolveProjectXyzLayers(result.project, controller.signal);
 
       if (controller.signal.aborted) return;
 
@@ -663,7 +632,7 @@ export function useProjectFileActions(mapControllerRef: MapControllerRef) {
         loadProject(detached, null);
         useAppStore.setState({ isDirty: true });
       } else {
-        loadProject(project, shareAuth ? null : normalizedUrl);
+        loadProject(project, normalizedUrl);
       }
     } finally {
       if (shareUrlAbortRef.current === controller) {

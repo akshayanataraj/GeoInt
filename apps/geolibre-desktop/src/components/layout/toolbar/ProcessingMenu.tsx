@@ -69,7 +69,6 @@ export function ProcessingMenu({
   const setSegmentEverythingOpen = useAppStore((s) => s.setSegmentEverythingOpen);
   const setSqlWorkspaceOpen = useAppStore((s) => s.setSqlWorkspaceOpen);
   const setPythonConsoleOpen = useAppStore((s) => s.setPythonConsoleOpen);
-  const setNotebookOpen = useAppStore((s) => s.setNotebookOpen);
   const setAssistantOpen = useAppStore((s) => s.setAssistantOpen);
   const setDashboardOpen = useAppStore((s) => s.setDashboardOpen);
   const setProcessingHistoryOpen = useAppStore((s) => s.setProcessingHistoryOpen);
@@ -582,11 +581,6 @@ export function ProcessingMenu({
         {show("processing.pythonConsole") && (
           <DropdownMenuItem onSelect={() => setPythonConsoleOpen(true)}>
             {t("toolbar.command.pythonConsole")}
-          </DropdownMenuItem>
-        )}
-        {show("processing.notebook") && (
-          <DropdownMenuItem onSelect={() => setNotebookOpen(true)}>
-            {t("toolbar.command.notebook")}
           </DropdownMenuItem>
         )}
         {show("processing.dashboard") && (

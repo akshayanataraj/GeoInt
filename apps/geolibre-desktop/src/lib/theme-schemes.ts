@@ -51,7 +51,11 @@ export const THEME_SCHEMES: readonly ThemeSchemeOption[] = [
   {
     id: "blue",
     labelKey: "settings.appearance.scheme.blue",
-    swatch: "hsl(221.2 83.2% 53.3%)",
+    // Ops-console cyan, not the old shadcn blue -- matches the light-mode
+    // --primary value in packages/ui/src/globals.css. The scheme id/i18n key
+    // stay "blue" (a persisted-value rename is out of scope here); only the
+    // label string (see en.json) and this swatch color changed.
+    swatch: "hsl(189 85% 30%)",
   },
   {
     id: "violet",

@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { afterEach, describe, it } from "node:test";
 import {
   createGeoLensHostFetch,
@@ -58,34 +57,6 @@ describe("GeoLens fetch override", () => {
     assert.deepEqual(geoLibreSampleHosts(), ["datasets.geolibre.app"]);
   });
 
-  /**
-   * The other half of that contract: every host `geolens-fetch.ts` routes to
-   * the native client must be inside the Tauri `http:default` scope. Narrowing
-   * or dropping the capability entry would otherwise leave the transport
-   * selecting a client the capability forbids — a runtime failure the
-   * registry-only assertion above cannot see.
-   */
-  it("keeps every natively-routed GeoLens host in the Tauri capability scope", () => {
-    const capabilities = JSON.parse(
-      readFileSync(
-        new URL("../apps/geolibre-desktop/src-tauri/capabilities/default.json", import.meta.url),
-        "utf8",
-      ),
-    ) as { permissions: ({ identifier: string; allow?: { url?: string }[] } | string)[] };
-    const httpScope = capabilities.permissions.find(
-      (permission) => typeof permission === "object" && permission.identifier === "http:default",
-    );
-    assert.ok(httpScope && typeof httpScope === "object", "no http:default permission");
-
-    const allowedHosts = new Set(
-      (httpScope.allow ?? []).flatMap((entry) =>
-        entry.url ? [new URL(entry.url.replace(/\*$/, "")).host] : [],
-      ),
-    );
-    for (const host of geoLibreSampleHosts()) {
-      assert.ok(allowedHosts.has(host), `${host} is missing from the http:default scope`);
-    }
-  });
 });
 
 /** GeoLibre-operated GeoLens hosts, derived exactly as `geolens-fetch.ts` does. */

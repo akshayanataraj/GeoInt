@@ -120,7 +120,6 @@ import {
   installLanguagePackFile,
   removeLanguagePack,
 } from "../../i18n";
-import { resolveShareHost, shareHostLabel } from "../../lib/share-geolibre";
 import { IS_STORE_BUILD, type UpdateNotificationLevel } from "../../lib/updates";
 import { ensureStartupProjectSnapshot, openProjectFile } from "../../lib/tauri-io";
 import {
@@ -165,7 +164,7 @@ export type SettingsSection =
   | "startup";
 
 /** A field a deep-link can ask Settings to focus once the section renders. */
-export type SettingsFocusTarget = "shareToken" | "accentColor";
+export type SettingsFocusTarget = "accentColor";
 
 /** Window event letting any panel open Settings at a given section (no prop-drilling). */
 export const OPEN_SETTINGS_EVENT = "geolibre:open-settings";
@@ -479,35 +478,6 @@ export function SettingsDialog({
   onToggleThemeMode,
 }: SettingsDialogProps) {
   const { t } = useTranslation();
-  // The share host's settings page, where the API token below is created.
-  // Derived from the resolved host so a self-hosted deployment links to its own
-  // page; null when the deployment configured no share host, in which case the
-  // description renders without a link rather than pointing at a stranger's site.
-  const shareHostState = resolveShareHost();
-  const shareBaseUrl = shareHostState.baseUrl;
-  const shareHost = shareHostLabel();
-  const shareSettingsUrl = shareBaseUrl ? `${shareBaseUrl}/settings` : null;
-  const shareTokenComponents: TransComponents = {
-    tokenLink: (
-      <a
-        className="underline"
-        href={shareSettingsUrl ?? undefined}
-        target="_blank"
-        rel="noreferrer noopener"
-      />
-    ),
-  };
-  // No usable host (sharing turned off, or a configured address that was
-  // rejected) means the token field is dead: it would authenticate against a
-  // server this deployment never talks to. Say so instead of rendering guidance
-  // that names the public hosted service — the whole point of the opt-out. The
-  // two unusable states get different copy: "not configured" would send an
-  // operator who typo'd the variable looking for one they never set.
-  const shareTokenUsable = shareBaseUrl != null;
-  const shareTokenUnavailableMessage =
-    shareHostState.status === "invalid"
-      ? t("settings.env.tokenHostInvalid")
-      : t("settings.env.tokenUnavailable");
   const { language, options: languageOptions, setLanguage } = useLanguage();
   const preferences = useAppStore((s) => s.preferences);
   const setPreferences = useAppStore((s) => s.setPreferences);
@@ -549,7 +519,6 @@ export function SettingsDialog({
   // A field a deep-link asked us to focus once its section renders; cleared
   // after the focus lands so a later open without a focus request stays put.
   const [pendingFocus, setPendingFocus] = useState<SettingsFocusTarget | null>(null);
-  const shareTokenInputRef = useRef<HTMLInputElement>(null);
   const languagePackFileRef = useRef<HTMLInputElement>(null);
   // The native color input in the Appearance pane. The accent-color dropdown's
   // "Custom" entry deep-links here so picking a custom color is reachable
@@ -798,25 +767,6 @@ export function SettingsDialog({
     window.addEventListener(OPEN_SETTINGS_EVENT, onOpenSettings);
     return () => window.removeEventListener(OPEN_SETTINGS_EVENT, onOpenSettings);
   }, []);
-
-  // Focus a deep-linked field once its section has rendered. The token input
-  // only mounts when the Environment section is active, so this waits for the
-  // section to settle rather than focusing on open.
-  useEffect(() => {
-    if (!open || pendingFocus !== "shareToken") return;
-    if (effectiveSection !== "environment") return;
-    const id = window.requestAnimationFrame(() => {
-      shareTokenInputRef.current?.focus();
-      shareTokenInputRef.current?.select();
-      // Set the guard BEFORE clearing pendingFocus: the clear re-runs the
-      // nav-focus effect, and because this write is synchronous and lexically
-      // first, the ref is already true when that run reads it, so it skips and
-      // leaves focus on the field we just focused.
-      skipNextNavFocusRef.current = true;
-      setPendingFocus(null);
-    });
-    return () => window.cancelAnimationFrame(id);
-  }, [open, pendingFocus, effectiveSection]);
 
   // Focus (and try to open) the custom-color picker when the accent-color
   // dropdown deep-links into the Appearance pane. The input only mounts while
@@ -1182,13 +1132,6 @@ export function SettingsDialog({
   // preserving the existing hidden lists (issue #592).
   const applySavedCustomProfile = () => {
     updateSavedUiProfile({ enabled: true, level: null });
-  };
-
-  const updateShareToken = (value: string) => {
-    // Kept in the draft and only committed on Save, so editing the token and
-    // then closing the dialog without saving discards the change (a secret
-    // field should not persist on every keystroke).
-    setDraftDesktopSettings((current) => ({ ...current, shareToken: value }));
   };
 
   const updateCesiumIonToken = (value: string) => {
@@ -2766,38 +2709,6 @@ export function SettingsDialog({
               {effectiveSection === "environment" ? (
                 <div className="space-y-5">
                   <div className="space-y-2">
-                    <h3 className="text-sm font-semibold">{t("settings.env.tokenTitle")}</h3>
-                    {shareTokenUsable ? (
-                      <>
-                        <p className="text-xs text-muted-foreground">
-                          <SettingsTrans
-                            i18nKey="settings.env.tokenDescription"
-                            values={{ shareHost }}
-                            // Non-null here: this branch requires shareBaseUrl,
-                            // which is what shareSettingsUrl is derived from.
-                            components={shareTokenComponents}
-                          />
-                        </p>
-                        <Input
-                          ref={shareTokenInputRef}
-                          aria-label={t("settings.env.tokenTitle")}
-                          type="password"
-                          autoComplete="new-password"
-                          placeholder={t("settings.env.tokenPlaceholder")}
-                          value={draftDesktopSettings.shareToken}
-                          onChange={(event) => updateShareToken(event.target.value)}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          {t("settings.env.tokenStorageNote", { shareHost })}
-                        </p>
-                      </>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        {shareTokenUnavailableMessage}
-                      </p>
-                    )}
-                  </div>
-                  <div className="space-y-2 border-t pt-5">
                     <h3 className="text-sm font-semibold">{t("settings.env.cesiumTokenTitle")}</h3>
                     <p className="text-xs text-muted-foreground">
                       <SettingsTrans

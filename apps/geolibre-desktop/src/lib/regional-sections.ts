@@ -11,7 +11,7 @@ import type { RegionalBasemapRegionId } from "@geolibre/core";
  */
 export function regionalBasemapRegionKey(regionId: RegionalBasemapRegionId) {
   switch (regionId) {
-    case "china":
-      return "basemapPicker.regionChina" as const;
+    case "india":
+      return "basemapPicker.regionIndia" as const;
   }
 }

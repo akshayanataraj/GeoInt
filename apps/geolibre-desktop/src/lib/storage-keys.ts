@@ -8,8 +8,15 @@
 /** Persisted desktop settings blob (layout, language, plugin sources, …). */
 export const DESKTOP_SETTINGS_STORAGE_KEY = "geolibre.desktopSettings";
 
-/** Basemap used to seed the empty workspace on the next app launch. */
-export const LAST_BASEMAP_STORAGE_KEY = "geolibre.lastBasemap";
+/**
+ * Basemap used to seed the empty workspace on the next app launch. Versioned
+ * (`.v2`) because this repurposing changed `DEFAULT_BASEMAP` (India/Google
+ * Hybrid, see UI_REPURPOSE_PLAN.md §2a) -- an unversioned key would keep
+ * replaying whatever basemap was stored under the old default from earlier
+ * testing sessions, silently masking the new default forever on any browser
+ * that already has an entry. Bump again if the default changes again.
+ */
+export const LAST_BASEMAP_STORAGE_KEY = "geolibre.lastBasemap.v2";
 
 /**
  * Latest version the user dismissed via "Skip this version" in the automated

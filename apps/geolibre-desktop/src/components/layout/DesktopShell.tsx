@@ -156,7 +156,6 @@ import { MapGrid } from "./MapGrid";
 import { RemoteCursorsOverlay } from "./RemoteCursorsOverlay";
 import { useCommandBridge } from "../../hooks/useCommandBridge";
 import { useEmbedApi } from "../../hooks/useEmbedApi";
-import { useJupyterRelay } from "../../hooks/useJupyterRelay";
 import { appendDiagnostic, useDiagnosticsSnapshot } from "../../lib/diagnostics";
 import { SectionErrorBoundary, SilentErrorBoundary } from "../common/error-boundaries";
 import { AttributeTable } from "../panels/AttributeTable";
@@ -167,7 +166,6 @@ import { ViewerLayerPanel } from "../panels/ViewerLayerPanel";
 import { FloatingPanels } from "../panels/FloatingPanels";
 import { SunPanel } from "../panels/SunPanel";
 import { RouteAnimationPanel } from "../panels/RouteAnimationPanel";
-import { FlightSimulatorPanel } from "../panels/FlightSimulatorPanel";
 import {
   PluginRightPanel,
   PLUGIN_PANEL_DEFAULT_WIDTH,
@@ -442,20 +440,6 @@ const SqlWorkspacePanel = lazy(() =>
     }),
 );
 
-const NotebookPanel = lazy(() =>
-  import("../panels/NotebookPanel")
-    .then((module) => ({
-      default: module.NotebookPanel,
-    }))
-    .catch((error) => {
-      // Same chunk-load fallback rationale as the dialogs above.
-      console.error("Failed to load NotebookPanel", error);
-      const Fallback = (() =>
-        null) as unknown as typeof import("../panels/NotebookPanel").NotebookPanel;
-      return { default: Fallback };
-    }),
-);
-
 const AssistantPanel = lazy(() =>
   import("../panels/AssistantPanel")
     .then((module) => ({
@@ -529,11 +513,6 @@ const MAX_SIDE_PANEL_WIDTH = 560;
 // stays mounted (collapsed) beside the notebook, so its rail still occupies this
 // much of the row when computing the map/notebook 50/50 split.
 const COLLAPSED_PANEL_RAIL_WIDTH = 44;
-// The notebook panel hosts a full Jupyter UI, so it needs far more room than
-// the layer/style side panels.
-const DEFAULT_NOTEBOOK_PANEL_WIDTH = 480;
-const MIN_NOTEBOOK_PANEL_WIDTH = 320;
-const MAX_NOTEBOOK_PANEL_WIDTH = 1100;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -551,8 +530,7 @@ function initialSidePanelWidth(): number {
   return clamp(cap, MIN_SIDE_PANEL_WIDTH, DEFAULT_SIDE_PANEL_WIDTH);
 }
 
-type ShellStyle = CSSProperties &
-  Record<"--layer-panel-width" | "--style-panel-width" | "--notebook-panel-width", string>;
+type ShellStyle = CSSProperties & Record<"--layer-panel-width" | "--style-panel-width", string>;
 
 export function DesktopShell({
   layoutOptions,
@@ -733,7 +711,6 @@ export function DesktopShell({
   // Browser panel, so their "open recent" calls coordinate their aborts (two
   // instances would race). Lifted here for the same reason as `collaboration`.
   const projectFiles = useProjectFileActions(mapControllerRef);
-  const notebookOpen = useAppStore((s) => s.ui.notebookOpen);
   const storymapPresenting = useAppStore((s) => s.ui.storymapPresenting);
   // A plugin panel docks at one of four positions beside the Layers/Style
   // panels and the user steps it between them; the built-in panel on the docked
@@ -915,10 +892,6 @@ export function DesktopShell({
   // (fly to a record, highlight it, open a tool; selection/view/tool events back
   // out). Off unless the deployment configured GEOLIBRE_EMBED_ORIGINS.
   useEmbedApi(mapControllerRef, mapAppAPI);
-  // Same scripting surface, reached over the desktop Jupyter server's relay, so
-  // a kernel driven from an EXTERNAL client (VS Code's Jupyter extension) can
-  // control the map too. Inert until that server is running.
-  useJupyterRelay(mapControllerRef);
   // Routes the Layers-panel Identify action to the raster pixel inspector for
   // COG layers (read band values on click). Inert until a COG is identified.
   useRasterIdentify();
@@ -930,38 +903,10 @@ export function DesktopShell({
   const openStylePanel = useCallback(() => {
     setStylePanelOpenRequest((request) => request + 1);
   }, []);
-  const [notebookPanelWidth, setNotebookPanelWidth] = useState(DEFAULT_NOTEBOOK_PANEL_WIDTH);
-  // Opening the notebook (Processing → Jupyter Notebook) splits the workspace
-  // 50/50 between the map and the notebook: we size the notebook to half of the
-  // space it shares with the map (the row width minus the layer panel and the
-  // Style panel's collapsed rail, when shown), while the Style panel collapses
-  // to that rail (see `autoCollapse` below). Fire only on the closed→open
-  // transition so a later manual resize is preserved.
-  const notebookWasOpenRef = useRef(notebookOpen);
-  useEffect(() => {
-    const wasOpen = notebookWasOpenRef.current;
-    notebookWasOpenRef.current = notebookOpen;
-    if (!notebookOpen || wasOpen) return;
-    const shellWidth = shellRef.current?.getBoundingClientRect().width ?? 0;
-    if (shellWidth <= 0) return;
-    const layerWidth = layoutOptions.layerPanelVisible ? layerPanelWidth : 0;
-    const styleRailWidth = layoutOptions.stylePanelVisible ? COLLAPSED_PANEL_RAIL_WIDTH : 0;
-    const half = Math.round((shellWidth - layerWidth - styleRailWidth) / 2);
-    // Honor the same min/max bounds as the drag-resize handler so the auto-size
-    // and manual-resize paths cannot diverge (an ultrawide shell would otherwise
-    // initialize past MAX, a width the user could never drag back to).
-    setNotebookPanelWidth(clamp(half, MIN_NOTEBOOK_PANEL_WIDTH, MAX_NOTEBOOK_PANEL_WIDTH));
-  }, [
-    notebookOpen,
-    layoutOptions.layerPanelVisible,
-    layoutOptions.stylePanelVisible,
-    layerPanelWidth,
-  ]);
   const deferPanelResize = isTauri();
   const shellStyle: ShellStyle = {
     "--layer-panel-width": `${layerPanelWidth}px`,
     "--style-panel-width": `${stylePanelWidth}px`,
-    "--notebook-panel-width": `${notebookPanelWidth}px`,
   };
 
   const clearDropMessageLater = useCallback(() => {
@@ -2190,74 +2135,6 @@ export function DesktopShell({
     [deferPanelResize, stylePanelWidth],
   );
 
-  // The notebook panel is docked on the same side as the Style panel, so its
-  // map-side handle widens the panel as the pointer moves toward the map
-  // (mirrors startStylePanelResize, with the notebook's own constants/CSS var).
-  const startNotebookPanelResize = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      event.stopPropagation();
-      event.currentTarget.setPointerCapture?.(event.pointerId);
-
-      const startX = event.clientX;
-      const startWidth = notebookPanelWidth;
-      const dirSign = getComputedStyle(event.currentTarget).direction === "rtl" ? -1 : 1;
-      const panelRect = event.currentTarget.parentElement?.getBoundingClientRect();
-      let nextWidth = startWidth;
-      let resizeFrame: number | null = null;
-      const previousCursor = document.body.style.cursor;
-      const previousUserSelect = document.body.style.userSelect;
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
-      window.dispatchEvent(new Event(PANEL_RESIZE_START_EVENT));
-
-      const onPointerMove = (moveEvent: PointerEvent) => {
-        nextWidth = clamp(
-          startWidth + dirSign * (startX - moveEvent.clientX),
-          MIN_NOTEBOOK_PANEL_WIDTH,
-          MAX_NOTEBOOK_PANEL_WIDTH,
-        );
-        if (resizeFrame !== null) return;
-        resizeFrame = window.requestAnimationFrame(() => {
-          resizeFrame = null;
-          if (deferPanelResize) {
-            if (verticalResizeGuideRef.current && panelRect) {
-              verticalResizeGuideRef.current.style.left = `${
-                dirSign === 1 ? panelRect.right - nextWidth : panelRect.left + nextWidth
-              }px`;
-              verticalResizeGuideRef.current.classList.remove("hidden");
-            }
-            return;
-          }
-          shellRef.current?.style.setProperty("--notebook-panel-width", `${nextWidth}px`);
-        });
-      };
-
-      const onPointerUp = () => {
-        window.removeEventListener("pointermove", onPointerMove);
-        window.removeEventListener("pointerup", onPointerUp);
-        window.removeEventListener("pointercancel", onPointerUp);
-        activeResizeCleanupRef.current = null;
-        if (resizeFrame !== null) {
-          window.cancelAnimationFrame(resizeFrame);
-          resizeFrame = null;
-        }
-        shellRef.current?.style.setProperty("--notebook-panel-width", `${nextWidth}px`);
-        verticalResizeGuideRef.current?.classList.add("hidden");
-        setNotebookPanelWidth(nextWidth);
-        window.dispatchEvent(new Event(PANEL_RESIZE_END_EVENT));
-        document.body.style.cursor = previousCursor;
-        document.body.style.userSelect = previousUserSelect;
-      };
-
-      activeResizeCleanupRef.current = onPointerUp;
-      window.addEventListener("pointermove", onPointerMove);
-      window.addEventListener("pointerup", onPointerUp);
-      window.addEventListener("pointercancel", onPointerUp);
-    },
-    [deferPanelResize, notebookPanelWidth],
-  );
-
   return (
     <div
       ref={shellRef}
@@ -2585,12 +2462,6 @@ export function DesktopShell({
           >
             <RouteAnimationPanel mapControllerRef={mapControllerRef} />
           </SectionErrorBoundary>
-          <SectionErrorBoundary
-            label="Flight simulator panel"
-            displayName={t("shell.section.flightSimulatorPanel")}
-          >
-            <FlightSimulatorPanel />
-          </SectionErrorBoundary>
           <KnowledgeCardConsentDialog
             open={knowledgeNoticeOpen}
             onOpenChange={(open) => {
@@ -2651,11 +2522,11 @@ export function DesktopShell({
                   builtinVisible={layoutOptions.stylePanelVisible}
                   builtinTitle={t("sharedRail.style")}
                   builtinIcon={<SlidersHorizontal className="h-4 w-4" />}
-                  // Mirror the standalone Style panel's autoCollapse triggers so the
-                  // notebook / story-map presentation collapses Style here too.
+                  // Mirror the standalone Style panel's autoCollapse triggers so a
+                  // story-map presentation collapses Style here too.
                   // `autoCollapsedPanel` is omitted because it is always null in a
                   // shared-rail mode (the panel is the sole active one).
-                  forceBuiltinCollapsed={notebookOpen || storymapPresenting}
+                  forceBuiltinCollapsed={storymapPresenting}
                   renderBuiltin={({ collapsed, onCollapsedChange }) => (
                     <StylePanel
                       mapControllerRef={mapControllerRef}
@@ -2665,17 +2536,15 @@ export function DesktopShell({
                       onCollapsedChange={onCollapsedChange}
                       // Controlled mode ignores autoCollapse for collapsing (the
                       // rail owns that via forceBuiltinCollapsed); it is passed so
-                      // a layer selection cannot expand Style over the notebook.
-                      autoCollapse={notebookOpen || storymapPresenting}
+                      // a layer selection cannot expand Style during a presentation.
+                      autoCollapse={storymapPresenting}
                       hideOwnRail
                     />
                   )}
                 />
               </SectionErrorBoundary>
-            ) : /* The notebook claims the workspace's right half, so the Style panel
-                collapses to its rail while the notebook is open (Processing →
-                Jupyter Notebook) rather than unmounting; the user can re-expand it.
-                A story map presentation collapses it for the same reason. */
+            ) : /* A story map presentation collapses the Style panel to its rail
+                rather than unmounting it, so the user can re-expand it. */
             layoutOptions.stylePanelVisible ? (
               <SectionErrorBoundary label="Style panel" displayName={t("shell.section.stylePanel")}>
                 <StylePanel
@@ -2683,7 +2552,6 @@ export function DesktopShell({
                   onResizeStart={startStylePanelResize}
                   openRequest={stylePanelOpenRequest}
                   autoCollapse={
-                    notebookOpen ||
                     storymapPresenting ||
                     layoutOptions.panelsCollapsed ||
                     autoCollapsedPanel === "style"
@@ -2704,17 +2572,6 @@ export function DesktopShell({
             </SectionErrorBoundary>
           </>
         )}
-        {notebookOpen ? (
-          <SectionErrorBoundary label="Notebook" displayName={t("shell.section.notebook")}>
-            <Suspense fallback={null}>
-              <NotebookPanel
-                onResizeStart={startNotebookPanelResize}
-                mapControllerRef={mapControllerRef}
-                themeMode={themeMode}
-              />
-            </Suspense>
-          </SectionErrorBoundary>
-        ) : null}
       </div>
       {layoutOptions.attributePanelVisible ? (
         <SectionErrorBoundary

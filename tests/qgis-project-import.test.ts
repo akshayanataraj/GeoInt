@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { applyGroupEffects } from "@geolibre/core";
+import { applyGroupEffects, DEFAULT_BASEMAP } from "@geolibre/core";
 import { strToU8, zipSync } from "fflate";
 import { DOMParser } from "linkedom";
 import {
@@ -183,7 +183,7 @@ describe("QGIS project import", () => {
   it("maps QGIS OpenStreetMap XYZ layers to the built-in basemap", () => {
     const result = importQgisProject(osmBasemapProjectXml(), "/work/example.qgs");
 
-    assert.equal(result.project.basemapStyleUrl, "https://tiles.openfreemap.org/styles/liberty");
+    assert.equal(result.project.basemapStyleUrl, DEFAULT_BASEMAP);
     assert.equal(result.project.basemapVisible, false);
     assert.equal(result.project.basemapOpacity, 0.7);
     assert.deepEqual(result.project.layers, []);

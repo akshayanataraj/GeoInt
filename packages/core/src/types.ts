@@ -49,11 +49,42 @@ export const PROTOMAPS_BASEMAPS = [
   { id: "protomaps-black", name: "Black", flavor: "black" },
 ] as const;
 
-export const DEFAULT_BASEMAP = "https://tiles.openfreemap.org/styles/liberty";
+// A regional-basemap sentinel (see regional-basemaps.ts), not a fetchable
+// URL -- resolved to Google Maps' hybrid (satellite + labels) tiles by
+// `resolveMapStyle` (packages/map/src/map-controller.ts). Chosen over the
+// OpenFreeMap default for India's officially depicted borders and a
+// photorealistic default look (see UI_REPURPOSE_PLAN.md §2a); see
+// regional-basemaps.ts's INDIA_BASEMAPS for the ToS caveat that comes with it.
+export const DEFAULT_BASEMAP = "geolibre://regional-basemap/google-hybrid";
 
 export const BLANK_BASEMAP = "";
 
 export const PROJECT_VERSION = "0.2.0";
+
+/**
+ * The app's single-screen mode switcher (see UI_REPURPOSE_PLAN.md §2): one
+ * persistent shell, no router, no distinct pages per section. `"map"` is the
+ * existing GeoLibre map/layers/panels experience, unchanged, and is where S2
+ * Grid and (later) satellite/flight-tracking layers live. Every other value
+ * is a placeholder screen for now (see `ModeScreen.tsx`) -- their real
+ * content (News/Social RAG chat, monitoring dashboards, admin CRUD,
+ * reports/digest forms) is future work per the plan's delivery phases.
+ * Feedback is deliberately not a mode: the feature spec requires it reachable
+ * from every module, so it is a persistent floating action instead.
+ */
+export const APP_MODES = [
+  "map",
+  "news",
+  "social",
+  "monitoring",
+  "reports",
+  "digest",
+  "admin",
+] as const;
+
+export type AppMode = (typeof APP_MODES)[number];
+
+export const DEFAULT_APP_MODE: AppMode = "map";
 
 /**
  * Every layer type, as a runtime list so untrusted input (an imported Layer

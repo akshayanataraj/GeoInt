@@ -9,7 +9,13 @@
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
+    /* Ops-console cyan (see the .dark block for why): darkened to 30% L for
+       AA on a white surface (4.79:1 with white --primary-foreground text),
+       since the dark mode's 55% L would only clear 1.76:1 here. Light mode is
+       not this product's emphasis, but it should not look broken if someone
+       switches to it, so the accent hue matches instead of staying the old
+       generic blue. */
+    --primary: 189 85% 30%;
     --primary-foreground: 210 40% 98%;
     /* Neutrals sit at ~16% saturation rather than the stock 40%, so the chrome
        reads as grey next to the map instead of tinting blue. --accent is one
@@ -28,7 +34,20 @@
        boundary, so it is deliberately darker. See the note in .dark below. */
     --border: 220 15% 88%;
     --input: 220 13% 76%;
-    --ring: 221.2 83.2% 53.3%;
+    --ring: 189 85% 30%;
+    /* Status/severity accents (S2 alerts, monitoring, live status) --
+       distinct from --primary/--destructive because those two are UI-chrome
+       roles (default action / dangerous action), while these three are
+       *data* semantics that must stay stable regardless of which accent
+       scheme (violet/emerald/rose/amber, below) is active. --status-info
+       intentionally equals --primary here, since cyan is both this product's
+       chrome accent and its "informational" data colour. */
+    --status-info: 189 85% 30%;
+    --status-info-foreground: 210 40% 98%;
+    --status-warning: 24.6 95% 53.1%;
+    --status-warning-foreground: 26 83.3% 14.1%;
+    --status-critical: 0 84.2% 60.2%;
+    --status-critical-foreground: 210 40% 98%;
     /* 0.375rem rather than shadcn's stock 0.5rem: a dense tool UI reads sharper,
        and the derived md/sm steps (calc -2px/-4px) stay positive. */
     --radius: 0.375rem;
@@ -49,43 +68,69 @@
     --elev-umbra: hsl(220 40% 12% / 0.1);
   }
 
-  /* Dark mode is built as an explicit elevation ladder. Previously --background,
-     --card and --popover were all 222.2 84% 4.9%, and --border, --input,
-     --muted, --secondary and --accent were all 217.2 32.6% 17.5% — five tokens,
-     one colour — so panels, dialogs and menus were indistinguishable from the
-     app canvas and only a 1px border separated them. Each step below is a
-     distinct surface:
+  /* Dark mode is built as an explicit elevation ladder — see UI_REPURPOSE_PLAN.md
+     §2a for the product direction this implements (a dark command-center/ops
+     console, not a generic dark-mode toggle). Previously --background, --card
+     and --popover were all 222.2 84% 4.9%, and --border, --input, --muted,
+     --secondary and --accent were all 217.2 32.6% 17.5% — five tokens, one
+     colour — so panels, dialogs and menus were indistinguishable from the app
+     canvas and only a 1px border separated them. Each step below is a
+     distinct surface, pushed one notch deeper/darker than the prior pass's
+     generic-shadcn values so the canvas reads as "deep charcoal" rather than
+     "dark grey":
 
-       background  9%   app canvas / base chrome
-       card       12%   toolbar, docked panels
-       popover    15%   menus, tooltips, dialogs
-       muted      20%   inset fills (status bar, wells)
-       accent     22%   hover fill — must read above popover, since menu items
-                        sit on it
+       background   7%   app canvas / base chrome
+       card        10%   toolbar, docked panels
+       popover     13%   menus, tooltips, dialogs
+       muted       17%   inset fills (status bar, wells)
+       accent      19%   hover fill — must read above popover, since menu items
+                         sit on it
+       border      18%   hairline: deliberately close to card/popover's own
+                         lightness so dividers barely register except as a
+                         hint (decorative, not a 3:1 UI-boundary requirement)
 
-     Saturation also drops from 84% to ~22%: the old value was a strongly
-     blue-tinted near-black that clashed with satellite imagery in the map view.
-     Every foreground/surface pair here clears WCAG AA 4.5:1 (lowest is
-     muted-foreground on accent at 4.82:1). */
+     Saturation stays low (~14-20%) and neutral-cool rather than the old
+     strongly blue-tinted near-black, so it clashes less with satellite
+     basemap imagery in the map view and reads as neutral "console" grey.
+     --primary/--ring shift from a generic shadcn blue to a vivid cyan (189°),
+     the product's signature ops-console accent — reserved for the active
+     mode indicator, focus rings, and default actions. Every foreground/
+     surface pair here clears WCAG AA 4.5:1 (checked: foreground pairs sit
+     between 9.9:1 and 18.1:1; muted-foreground on muted/accent is 5.7:1/
+     5.3:1). */
   .dark {
-    --background: 222 24% 9%;
+    --background: 220 20% 7%;
     --foreground: 210 40% 98%;
-    --card: 222 22% 12%;
+    --card: 220 18% 10%;
     --card-foreground: 210 40% 98%;
-    --popover: 222 21% 15%;
+    --popover: 220 17% 13%;
     --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 220 18% 20%;
+    --primary: 189 85% 55%;
+    --primary-foreground: 220 20% 9%;
+    --secondary: 220 16% 17%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 220 18% 20%;
+    --muted: 220 16% 17%;
     --muted-foreground: 215 20.2% 65.1%;
-    --accent: 220 18% 22%;
+    --accent: 218 20% 19%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --border: 220 14% 26%;
-    --input: 220 12% 38%;
+    --border: 220 14% 18%;
+    --input: 220 14% 28%;
+    /* Status/severity accents (S2 alerts, monitoring, live status) -- see the
+       :root block above for why these are distinct from --primary/
+       --destructive. --status-critical sits at 48% L rather than a brighter
+       "danger red" because white text on this hue only clears WCAG AA
+       (4.5:1) at 52% L or below (measured); 48% keeps a safety margin (5.0:1)
+       while staying visibly brighter/more alarming than --destructive's
+       30.6% L, which is tuned for large filled surfaces (buttons) rather
+       than a small glowing status dot or badge. */
+    --status-info: 189 85% 55%;
+    --status-info-foreground: 220 20% 9%;
+    --status-warning: 38 92% 55%;
+    --status-warning-foreground: 26 83.3% 14.1%;
+    --status-critical: 0 72% 48%;
+    --status-critical-foreground: 210 40% 98%;
     /* Tailwind's built-in shadow scale bakes in a 10%-black colour, which is
        all but invisible against these surfaces — so before this, every one of
        the app's ~65 shadow utilities did nothing in dark mode and elevation was
@@ -95,11 +140,11 @@
     --elev-umbra: hsl(0 0% 0% / 0.55);
 
     /* Matches --primary, so the focus ring stays visible against the lifted
-       surfaces (4.98:1 on --background, 4.64:1 on --card). The violet, rose and
-       amber schemes below already pair ring with primary this way; emerald was
-       the one exception and is brought into line there, since the lifted
-       surfaces left its darker ring almost no headroom. */
-    --ring: 217.2 91.2% 59.8%;
+       surfaces. The violet, rose and amber schemes below already pair ring
+       with primary this way; emerald was the one exception and is brought
+       into line there, since the lifted surfaces left its darker ring
+       almost no headroom. */
+    --ring: 189 85% 55%;
   }
 
   /* Accent color schemes. Each scheme overrides only the accent-bearing tokens

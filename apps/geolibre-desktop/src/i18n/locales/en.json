@@ -234,7 +234,7 @@
     "sectionMars": "Mars",
     "sectionOther": "Other celestial bodies",
     "sectionRegional": "Regional",
-    "regionChina": "China (中国)"
+    "regionIndia": "India"
   },
   "planetSwitcher": {
     "label": "Celestial body",
@@ -2051,7 +2051,7 @@
       "customColor": "Custom color",
       "customColorHex": "Custom color hex code",
       "scheme": {
-        "blue": "Blue",
+        "blue": "Cyan",
         "violet": "Violet",
         "emerald": "Emerald",
         "rose": "Rose",

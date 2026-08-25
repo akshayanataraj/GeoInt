@@ -1,1 +1,10 @@
-null
+{
+  "enabled": true,
+  "hiddenMenuItems": [
+    "processing.whitebox",
+    "processing.earthEngine",
+    "controls.fieldCollection",
+    "controls.flightSimulator"
+  ],
+  "lock": true
+}
