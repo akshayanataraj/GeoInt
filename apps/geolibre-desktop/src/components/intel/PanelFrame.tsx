@@ -24,14 +24,6 @@ export interface PanelFrameProps {
   onClose: () => void;
   children: ReactNode;
   className?: string;
-  /**
-   * Whether the frame scrolls its own body. True for the ordinary case (a list
-   * that grows past the panel). Pass false when the child manages its own
-   * scrolling *and* has a pinned region -- the chat panel keeps its composer
-   * fixed at the bottom, which cannot work inside a scrolling ancestor because
-   * the composer would scroll away with the transcript.
-   */
-  bodyScroll?: boolean;
 }
 
 export function PanelFrame({
@@ -41,7 +33,6 @@ export function PanelFrame({
   onClose,
   children,
   className,
-  bodyScroll = true,
 }: PanelFrameProps) {
   return (
     <section
@@ -80,12 +71,7 @@ export function PanelFrame({
           <TooltipContent side="bottom">Close</TooltipContent>
         </Tooltip>
       </header>
-      <div
-        className={cn(
-          "flex min-h-0 flex-1 flex-col",
-          bodyScroll && "overflow-y-auto overscroll-contain",
-        )}
-      >
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
         {children}
       </div>
     </section>

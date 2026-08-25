@@ -66,6 +66,11 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { COMMENTS_PANEL_ID, useRegisterCommentsPanel } from "../../hooks/useRegisterCommentsPanel";
+import {
+  ANALYST_CHAT_PANEL_ID,
+  useRegisterAnalystChatPanel,
+} from "../../hooks/useRegisterAnalystChatPanel";
+import { IntelChatPanel } from "../intel/IntelChatPanel";
 import { CommentsPanel } from "../comments/CommentsPanel";
 import { CommentMapOverlay } from "../comments/CommentMapOverlay";
 import { useCommentTool } from "../comments/useCommentTool";
@@ -681,7 +686,13 @@ export function DesktopShell({
   const setPythonConsoleOpen = useAppStore((s) => s.setPythonConsoleOpen);
   const sqlWorkspaceOpen = useAppStore((s) => s.ui.sqlWorkspaceOpen);
   const setSqlWorkspaceOpen = useAppStore((s) => s.setSqlWorkspaceOpen);
-  // Register the Browser as a movable/dockable right panel; its body is portaled
+  // Analyst Chat registers into the same shared Style rail Comments does, and
+  // must run first: the shared rail's "which panel leads" resolution falls back
+  // to whichever panel entered the registry's visible set first when nothing is
+  // actively expanded, and this is what puts Chat above Comments and above the
+  // built-in Style panel (always last) -- see useRegisterAnalystChatPanel.
+  useRegisterAnalystChatPanel();
+  // Register Comments as a movable/dockable right panel; its body is portaled
   // into a dedicated content host (below) that the dock slots adopt.
   useRegisterCommentsPanel();
   // One shared project-file-actions instance for both the toolbar and the
@@ -712,6 +723,12 @@ export function DesktopShell({
   });
   // A third, dedicated host for the Comments panel's React portal.
   const [commentsContentEl] = useState(() => {
+    const el = document.createElement("div");
+    el.className = "contents";
+    return el;
+  });
+  // A fourth, dedicated host for the Analyst Chat panel's React portal.
+  const [analystChatContentEl] = useState(() => {
     const el = document.createElement("div");
     el.className = "contents";
     return el;
@@ -759,9 +776,14 @@ export function DesktopShell({
     enforceViewerPlugins();
   }, [enforceViewerPlugins]);
   // The dock slots adopt whichever host owns the active panel's content: the
-  // Browser's dedicated portal host, the Comments dedicated portal host, or the shared imperative plugin host.
+  // Comments or Analyst Chat dedicated portal host, or the shared imperative
+  // plugin host.
   const dockContentEl =
-    activePanelId === COMMENTS_PANEL_ID ? commentsContentEl : pluginContentEl;
+    activePanelId === COMMENTS_PANEL_ID
+      ? commentsContentEl
+      : activePanelId === ANALYST_CHAT_PANEL_ID
+        ? analystChatContentEl
+        : pluginContentEl;
   // Render the active panel into the shared host once; re-run when its
   // registration is replaced (re-registration refresh) but not on dock/collapse
   // changes. Keyed on the render function identity so that a plugin
@@ -2146,6 +2168,12 @@ export function DesktopShell({
               commentsContentEl,
             )
           : null}
+        {/* Same portal-into-a-dedicated-host pattern as Comments above: the
+            body needs the app's React context, so it cannot be drawn through
+            the registry's imperative `render`. */}
+        {activePanelId === ANALYST_CHAT_PANEL_ID && !layoutOptions.panelsHidden
+          ? createPortal(<IntelChatPanel />, analystChatContentEl)
+          : null}
         {/* Map-only / hidden-panels embeds show nothing but the map: skip the
             whole left side-dock (Layers, plugin panels, and the shared rail that
             hosts the Browser entry), not just the built-in Layers panel. */}
@@ -2213,7 +2241,12 @@ export function DesktopShell({
               it no longer lives in. */}
           {layersOverlayOpen && !layoutOptions.viewer ? (
             <SectionErrorBoundary label="Layer panel" displayName={t("shell.section.layerPanel")}>
-              <div className="geoint-fade-in absolute start-3 top-3 z-20 flex max-h-[calc(100%-1.5rem)] w-[320px] flex-col overflow-hidden rounded-lg border bg-card shadow-lg motion-reduce:animate-none">
+              {/* `map-glass` (translucent + backdrop blur) rather than a flat
+                  `bg-card`: this floats directly over the map, so a frosted,
+                  slightly-see-through surface reads as a real floating panel
+                  material instead of an opaque card pasted on top of the
+                  imagery. */}
+              <div className="geoint-fade-in intel-hairline absolute start-3 top-3 z-20 flex max-h-[calc(100%-1.5rem)] w-[320px] flex-col overflow-hidden rounded-lg border shadow-lg map-glass motion-reduce:animate-none">
                 <LayerPanel
                   mapControllerRef={mapControllerRef}
                   collaborationApi={collaboration}

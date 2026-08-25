@@ -71,22 +71,27 @@ export const PROJECT_VERSION = "0.2.0";
  * only one area could be on screen at a time, and the live map had to be hidden
  * to show any other one. This product is a monitoring console, so the map is
  * the permanent substrate and every other surface is a panel *beside* or *over*
- * it, toggled independently. Two kinds:
+ * it, toggled independently. Three kinds:
  *
- * - {@link IntelDockPanel} -- docks to the left or right of the map and
- *   reserves real layout width. The map narrows but stays live and interactive,
- *   which is the entire point: S2 cell metrics, the event feed, and the analyst
- *   chat are read *while* looking at the map, not instead of it. The left dock
- *   stacks S2 above the event feed; chat takes the right so both can be open at
- *   once without either being cramped.
+ * - {@link IntelDockPanel} -- docks to the left of the map and reserves real
+ *   layout width, stacked (S2 above the event feed) so both are visible at
+ *   once. The map narrows but stays live and interactive, which is the entire
+ *   point: S2 cell metrics and the event feed are read *while* looking at the
+ *   map, not instead of it.
+ * - The **Analyst Chat** panel is *not* one of these. It is registered into
+ *   GeoLibre's own right-side panel registry (see `useRegisterAnalystChatPanel`
+ *   in the app), sharing the Style rail above Comments and the built-in Style
+ *   panel -- reusing that dock's chrome (collapse, move, close) rather than a
+ *   second panel system of our own. That registry is the single source of
+ *   truth for whether Chat is open, so its visibility is not tracked here.
  * - {@link IntelConsoleSheet} -- a large overlay for the non-spatial admin
  *   surfaces (platform health, reports, digest settings, accounts). These have
  *   nothing to put on a map, so they take the screen; the map stays mounted
  *   behind them and comes back untouched on close.
  *
- * Both are independent toggles, so any combination is a valid layout.
+ * All are independent toggles, so any combination is a valid layout.
  */
-export const INTEL_DOCK_PANELS = ["s2", "events", "chat"] as const;
+export const INTEL_DOCK_PANELS = ["s2", "events"] as const;
 
 export type IntelDockPanel = (typeof INTEL_DOCK_PANELS)[number];
 
@@ -94,18 +99,11 @@ export const INTEL_CONSOLE_SHEETS = ["monitoring", "reports", "digest", "admin"]
 
 export type IntelConsoleSheet = (typeof INTEL_CONSOLE_SHEETS)[number];
 
-/** Which side of the map each dock panel occupies. */
-export const INTEL_DOCK_SIDE: Readonly<Record<IntelDockPanel, "left" | "right">> = {
-  s2: "left",
-  events: "left",
-  chat: "right",
-};
-
 export interface IntelWorkspaceState {
   /**
    * Open dock panels, as an explicit id list rather than a bag of booleans, so
-   * a dock renders its panels in a stable, meaningful order (S2 above the event
-   * feed) regardless of the order the user happened to open them in.
+   * the dock renders its panels in a stable, meaningful order (S2 above the
+   * event feed) regardless of the order the user happened to open them in.
    */
   openPanels: readonly IntelDockPanel[];
   /** The overlay sheet on screen, or null. Only one is open at a time. */
@@ -115,9 +113,8 @@ export interface IntelWorkspaceState {
 }
 
 /**
- * Opening layout: a live map with both left-hand intelligence panels up (an
- * empty console would hide the product on first launch) and the chat closed,
- * since starting a conversation is a deliberate act.
+ * Opening layout: a live map with both intelligence panels up (an empty
+ * console would hide the product on first launch).
  */
 export const DEFAULT_INTEL_WORKSPACE: IntelWorkspaceState = {
   openPanels: ["s2", "events"],

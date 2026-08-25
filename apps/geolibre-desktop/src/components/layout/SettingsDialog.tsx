@@ -37,7 +37,6 @@ import {
 } from "@geolibre/ui";
 import type { MapController } from "@geolibre/map";
 import {
-  Bot,
   Braces,
   Check,
   Crosshair,
@@ -132,21 +131,6 @@ import {
   presetHiddenSets,
   showsAdvancedNotices,
 } from "../../lib/ui-profile";
-import {
-  ASSISTANT_PROVIDER_IDS,
-  PROVIDER_LABELS,
-  scopeOsEnvToProject,
-  type AssistantProfile,
-  type AssistantProviderId,
-  type RuntimeEnv,
-} from "../../lib/assistant/provider";
-import { loadOsEnvVars, readOsEnv } from "../../lib/assistant/os-env";
-import {
-  PROVIDER_DOCS_URL,
-  PROVIDER_FIELDS,
-  type ProviderField,
-} from "../../lib/assistant/provider-fields";
-import { AiSectionContent } from "./AiSectionContent";
 
 export type SettingsSection =
   | "language"
@@ -155,7 +139,6 @@ export type SettingsSection =
   | "appearance"
   | "interface"
   | "geocoding"
-  | "ai"
   | "environment"
   | "updates"
   | "startup";
@@ -246,7 +229,6 @@ const SECTION_ITEMS: Array<{
     icon: SlidersHorizontal,
   },
   { id: "geocoding", labelKey: "settings.section.geocoding", icon: Locate },
-  { id: "ai", labelKey: "settings.section.ai", icon: Bot },
   {
     id: "environment",
     labelKey: "settings.section.environment",
@@ -288,8 +270,6 @@ interface DraftDesktopSettings {
   layout: DesktopLayoutSettings;
   shareToken: string;
   cesiumIonToken: string;
-  aiProfiles: AssistantProfile[];
-  defaultAiProfileId: string | null;
   uiProfile: UiProfileSettings;
   updates: UpdateSettings;
   startup: StartupSettings;
@@ -361,11 +341,6 @@ function cloneDesktopSettings(settings: DesktopSettings): DraftDesktopSettings {
     layout: { ...settings.layout },
     shareToken: settings.shareToken,
     cesiumIonToken: settings.cesiumIonToken,
-    aiProfiles: settings.aiProfiles.map((p) => ({
-      ...p,
-      fieldValues: { ...p.fieldValues },
-    })),
-    defaultAiProfileId: settings.defaultAiProfileId,
     uiProfile: {
       ...settings.uiProfile,
       hiddenDataSources: [...settings.uiProfile.hiddenDataSources],
@@ -567,85 +542,6 @@ export function SettingsDialog({
       ).length,
     [draftPreferences.environmentVariables],
   );
-  // The AI profile being edited in the AI section. Null when no profile is
-  // selected (the user sees the profile list). Seeded to the first existing
-  // profile when the dialog opens.
-  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
-  // Whether the user is creating a new profile (transient — no id yet).
-  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
-  // The draft env vars as a plain name→value map (enabled, named only), matching
-  // what the live runtime env will hold after Save. Drives the per-provider
-  // "configured" status without re-implementing provider.ts resolution.
-  const draftEnv = useMemo(() => {
-    const env: Record<string, string> = {};
-    for (const variable of draftPreferences.environmentVariables) {
-      const key = variable.key.trim();
-      if (variable.enabled && key) env[key] = variable.value;
-    }
-    return env;
-  }, [draftPreferences.environmentVariables]);
-
-  /** The editing profile (the one whose fields are shown), or null. */
-  const editingProfile: AssistantProfile | null = useMemo(() => {
-    if (isCreatingProfile) return null;
-    if (!editingProfileId) return null;
-    return draftDesktopSettings.aiProfiles.find((p) => p.id === editingProfileId) ?? null;
-  }, [editingProfileId, isCreatingProfile, draftDesktopSettings.aiProfiles]);
-
-  /** The provider shown in the editing fields. Derived from the editing profile. */
-  const editingProvider: AssistantProviderId = editingProfile?.provider ?? "google";
-
-  /**
-   * Flat env map from all profiles' fieldValues. Projected into the runtime env
-   * alongside OS and project values so provider "configured" status reflects
-   * what the assistant will actually resolve.
-   */
-  const draftProfilesEnv = useMemo(() => {
-    const env: Record<string, string> = {};
-    for (const profile of draftDesktopSettings.aiProfiles) {
-      for (const [key, value] of Object.entries(profile.fieldValues)) {
-        const name = key.trim();
-        if (name && value) env[name] = value;
-      }
-    }
-    return env;
-  }, [draftDesktopSettings.aiProfiles]);
-  // AI keys read from the user's OS environment (desktop only). This dialog is
-  // mounted eagerly at startup — before the App-root loader populates the cache
-  // and before the async Tauri read resolves — so a mount-only read would freeze
-  // at `{}`. Load it here through state (mirroring useRuntimeEnvironmentVariables)
-  // so provider status and the badges below reflect env-sourced credentials.
-  const [osEnv, setOsEnv] = useState<RuntimeEnv>(() => readOsEnv());
-  useEffect(() => {
-    let cancelled = false;
-    loadOsEnvVars().then((env) => {
-      if (!cancelled) setOsEnv(env);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  // Scope OS values against the draft exactly as the runtime merge does
-  // (useRuntimeEnvironmentVariables), so this dialog's notion of "configured"
-  // and the field badges match what the assistant will actually resolve — a
-  // plain spread would disagree in the alias-collision case (e.g. an empty
-  // project GOOGLE_API_KEY row shadows the whole Google OS alias group).
-  const scopedOsEnv = useMemo(
-    () =>
-      scopeOsEnvToProject(
-        osEnv,
-        new Set([...Object.keys(draftEnv), ...Object.keys(draftProfilesEnv)]),
-      ),
-    [osEnv, draftEnv, draftProfilesEnv],
-  );
-  // Merge OS env under the drafts so a provider configured purely via a system
-  // environment variable still reports "ready". Precedence mirrors the live
-  // runtime merge: OS < device AI keys < project Environment variables.
-  const effectiveEnv = useMemo(
-    () => ({ ...scopedOsEnv, ...draftProfilesEnv, ...draftEnv }),
-    [scopedOsEnv, draftProfilesEnv, draftEnv],
-  );
-
   // Seed the draft from the store only when the dialog opens. Depending on
   // preferences would reset in-progress edits if the store changed while the
   // dialog is open (e.g. a slow ?url= project finishes loading).
@@ -671,39 +567,6 @@ export function SettingsDialog({
     setDraftDesktopSettings(
       cloneDesktopSettings(useDesktopSettingsStore.getState().desktopSettings),
     );
-    // Land the AI section on the first profile's provider, or the first
-    // available provider if no profiles exist, so the user sees something
-    // relevant without extra clicks.
-    const storeSettings = useDesktopSettingsStore.getState().desktopSettings;
-    const seededProfiles = storeSettings.aiProfiles.map((p) => ({
-      ...p,
-      fieldValues: { ...p.fieldValues },
-    }));
-    const seededProjectEnv: Record<string, string> = {};
-    for (const variable of seededPreferences.environmentVariables) {
-      const key = variable.key.trim();
-      if (variable.enabled && key) seededProjectEnv[key] = variable.value;
-    }
-    // Build a flat env from all profile field values for determining
-    // available providers during seeding.
-    const seededAiEnv: Record<string, string> = {};
-    for (const profile of seededProfiles) {
-      for (const [key, value] of Object.entries(profile.fieldValues)) {
-        const name = key.trim();
-        if (name && value) seededAiEnv[name] = value;
-      }
-    }
-    const seededEnv = {
-      ...scopeOsEnvToProject(
-        readOsEnv(),
-        new Set([...Object.keys(seededProjectEnv), ...Object.keys(seededAiEnv)]),
-      ),
-      ...seededAiEnv,
-      ...seededProjectEnv,
-    };
-    // Show the profile list by default (do not auto-select a profile for editing).
-    setEditingProfileId(null);
-    setIsCreatingProfile(false);
     setRevealedValueIds(new Set());
     setError(null);
     setLiveProjection(mapControllerRef.current?.readProjection() ?? null);
@@ -813,75 +676,6 @@ export function SettingsDialog({
       }
       return next;
     });
-  };
-
-  // Every env var name a field is backed by: its canonical key plus any aliases
-  // provider.ts also accepts (e.g. GOOGLE_API_KEY for the Gemini field).
-  const fieldEnvKeys = (field: ProviderField): readonly string[] => [
-    field.envKey,
-    ...(field.aliases ?? []),
-  ];
-
-  // The value of an env-var-backed AI provider field, or "" when unset. Reads
-  // the editing profile's field values first (where the AI section saves keys),
-  // then falls back to a matching value still held in the project's Environment
-  // variables so an existing credential stays visible and editable here.
-  const getProviderField = (field: ProviderField): string => {
-    if (editingProfile) {
-      for (const key of fieldEnvKeys(field)) {
-        const value = editingProfile.fieldValues[key];
-        if (value) return value;
-      }
-    }
-    for (const key of fieldEnvKeys(field)) {
-      const row = draftPreferences.environmentVariables.find(
-        (variable) => variable.key === key && variable.enabled,
-      );
-      if (row) return row.value;
-    }
-    return "";
-  };
-
-  // The OS-environment variable name backing a field, when the system provides
-  // a value the project doesn't. Drives the "read from your environment" badge
-  // so a user sees a key is already covered without typing (or saving) it here.
-  const osFieldEnvName = (field: ProviderField): string | null => {
-    for (const key of fieldEnvKeys(field)) {
-      if (scopedOsEnv[key]?.trim()) return key;
-    }
-    return null;
-  };
-
-  // Write an AI provider field to the editing profile's field values. Any alias
-  // entry is dropped so re-entering a credential never leaves a stale duplicate
-  // under an alias, and clearing removes the entry so the store never accrues
-  // empty values. The matching rows are also removed from the project's
-  // Environment variables: these keys now live in the profile, so a leftover
-  // project row must not shadow the profile value at runtime (project env has
-  // higher precedence) nor get serialized into a shared project file.
-  const setProviderField = (field: ProviderField, value: string) => {
-    if (!editingProfile) return;
-    const keys = fieldEnvKeys(field);
-    setDraftDesktopSettings((current) => {
-      const next = current.aiProfiles.map((p) => {
-        if (p.id !== editingProfile.id) return p;
-        const nextFieldValues = { ...p.fieldValues };
-        for (const key of keys) delete nextFieldValues[key];
-        if (value !== "") nextFieldValues[field.envKey] = value;
-        return { ...p, fieldValues: nextFieldValues };
-      });
-      return { ...current, aiProfiles: next };
-    });
-    setDraftPreferences((current) => {
-      if (!current.environmentVariables.some((v) => keys.includes(v.key))) {
-        return current;
-      }
-      return {
-        ...current,
-        environmentVariables: current.environmentVariables.filter((v) => !keys.includes(v.key)),
-      };
-    });
-    setError(null);
   };
 
   const updateMapPreferences = (patch: Partial<MapPreferences>) => {
@@ -1286,8 +1080,6 @@ export function SettingsDialog({
       layout: draftDesktopSettings.layout,
       shareToken: draftDesktopSettings.shareToken,
       cesiumIonToken: draftDesktopSettings.cesiumIonToken,
-      aiProfiles: draftDesktopSettings.aiProfiles,
-      defaultAiProfileId: draftDesktopSettings.defaultAiProfileId,
       uiProfile: committedUiProfile,
       updates: draftDesktopSettings.updates,
       startup: draftDesktopSettings.startup,
@@ -1642,17 +1434,6 @@ export function SettingsDialog({
             >
               <Locate className="me-2 h-3.5 w-3.5" />
               {t("settings.menu.geocoding")}
-            </DropdownMenuItem>
-          )}
-          {showSettingsItem("settings.ai") && (
-            <DropdownMenuItem
-              onSelect={() => {
-                setSection("ai");
-                setOpen(true);
-              }}
-            >
-              <Bot className="me-2 h-3.5 w-3.5" />
-              {t("settings.menu.ai")}
             </DropdownMenuItem>
           )}
           {showSettingsItem("settings.environment") && (
@@ -2634,26 +2415,6 @@ export function SettingsDialog({
                   })()}
                 </div>
               ) : null}
-              {effectiveSection === "ai" ? (
-                <AiSectionContent
-                  draftDesktopSettings={draftDesktopSettings}
-                  setDraftDesktopSettings={setDraftDesktopSettings}
-                  editingProfileId={editingProfileId}
-                  setEditingProfileId={setEditingProfileId}
-                  isCreatingProfile={isCreatingProfile}
-                  setIsCreatingProfile={setIsCreatingProfile}
-                  editingProfile={editingProfile}
-                  editingProvider={editingProvider}
-                  defaultAiProfileId={draftDesktopSettings.defaultAiProfileId}
-                  scopedOsEnv={scopedOsEnv}
-                  effectiveEnv={effectiveEnv}
-                  revealedValueIds={revealedValueIds}
-                  toggleValueVisibility={toggleValueVisibility}
-                  getProviderField={getProviderField}
-                  setProviderField={setProviderField}
-                  osFieldEnvName={osFieldEnvName}
-                />
-              ) : null}
               {effectiveSection === "environment" ? (
                 <div className="space-y-5">
                   <div className="space-y-2">
@@ -3002,10 +2763,6 @@ export function SettingsDialog({
               <Button type="button" onClick={() => setOpen(false)}>
                 {t("common.close")}
               </Button>
-            </div>
-          ) : effectiveSection === "ai" && (editingProfileId || isCreatingProfile) ? (
-            <div className="border-t px-6 py-4 text-center text-xs text-muted-foreground">
-              {t("settings.ai.profileEditSaveHint")}
             </div>
           ) : (
             <div className="flex justify-end gap-2 border-t px-6 py-4">

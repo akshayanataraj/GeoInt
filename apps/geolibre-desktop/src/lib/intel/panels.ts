@@ -5,6 +5,12 @@
  * feature area. The rail no longer switches pages: dock entries toggle a panel
  * beside the live map, and sheet entries raise an overlay over it.
  *
+ * Analyst Chat is deliberately absent from {@link INTEL_DOCK_PANEL_META}: it
+ * lives in GeoLibre's own right-side panel registry now (sharing the Style
+ * rail with Comments and Style), not this rail -- see
+ * `useRegisterAnalystChatPanel`. Duplicating a toggle for it here would give
+ * the console two buttons for the same panel.
+ *
  * Labels are plain English rather than i18n keys for the same reason the old
  * file gave: these surfaces are placeholders pending real backends, and wiring
  * nineteen locale catalogues to copy that is about to be rewritten is wasted
@@ -16,7 +22,6 @@ import {
   Activity,
   Grid3x3,
   Mail,
-  MessageSquare,
   Radio,
   ShieldCheck,
   FileText,
@@ -50,12 +55,6 @@ export const INTEL_DOCK_PANEL_META: readonly IntelDockPanelMeta[] = [
     label: "Event Feed",
     hint: "Recent indexed topics and their timelines",
     icon: Radio,
-  },
-  {
-    id: "chat",
-    label: "Analyst Chat",
-    hint: "Ask across news and social sources",
-    icon: MessageSquare,
   },
 ];
 

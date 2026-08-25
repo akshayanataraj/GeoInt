@@ -1,5 +1,5 @@
 import { collapseRightPanel, getRightPanel, openRightPanel } from "@geolibre/plugins";
-import { cn } from "@geolibre/ui";
+import { cn, Tooltip, TooltipContent, TooltipTrigger } from "@geolibre/ui";
 import { PanelRight } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -174,43 +174,53 @@ export function SharedSidebar({
 
   // The Layers rail sits on the far-left edge (border on its right); the Style
   // rail on the far-right edge (border on its left).
+  //
+  // Restyled off the stock look (a boxed `bg-accent` active state, an
+  // always-visible rotated label) to match the console's own rail
+  // (`IntelRail`/`ModeDock`): ghost buttons, a lit `glow-active` ring instead of
+  // a filled box, and icon-only-with-tooltip discoverability at desktop widths
+  // rather than a permanent vertical label. The desktop label is not removed,
+  // only visually hidden (`md:hidden` on the span) -- it still exists for
+  // narrower/touch layouts where a tooltip would not be reachable.
   const rail = (
     <aside
       aria-label={t("sharedRail.label")}
       className={cn(
-        "flex w-full shrink-0 items-center gap-1 border-t bg-card px-2 py-1 md:h-auto md:w-11 md:flex-col md:border-t-0 md:px-0 md:py-2",
+        "intel-hairline flex w-full shrink-0 items-center gap-1 border-t bg-background px-2 py-1 md:h-auto md:w-11 md:flex-col md:border-t-0 md:px-0 md:py-2",
         side === "layers" ? "md:border-e" : "md:border-s",
       )}
     >
-      {entries.map((entry) => (
-        <button
-          key={entry.id}
-          type="button"
-          aria-pressed={entry.active}
-          title={
-            entry.active
-              ? t("sharedRail.collapse", { title: entry.title })
-              : t("sharedRail.expand", { title: entry.title })
-          }
-          aria-label={
-            entry.active
-              ? t("sharedRail.collapse", { title: entry.title })
-              : t("sharedRail.expand", { title: entry.title })
-          }
-          onClick={entry.onToggle}
-          className={cn(
-            "flex items-center gap-2 rounded px-1.5 py-1.5 md:flex-col md:px-1 md:py-2",
-            entry.active
-              ? "bg-accent text-accent-foreground"
-              : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-          )}
-        >
-          {entry.icon}
-          <span className="text-[10px] font-semibold uppercase tracking-wide md:[writing-mode:vertical-rl] md:rotate-180">
-            {entry.title}
-          </span>
-        </button>
-      ))}
+      {entries.map((entry) => {
+        const label = entry.active
+          ? t("sharedRail.collapse", { title: entry.title })
+          : t("sharedRail.expand", { title: entry.title });
+        const button = (
+          <button
+            key={entry.id}
+            type="button"
+            aria-pressed={entry.active}
+            aria-label={label}
+            onClick={entry.onToggle}
+            className={cn(
+              "flex items-center gap-2 rounded-lg px-1.5 py-1.5 transition-colors md:h-9 md:w-9 md:flex-col md:justify-center md:px-1 md:py-2",
+              entry.active
+                ? "glow-active text-primary"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {entry.icon}
+            <span className="text-[10px] font-semibold uppercase tracking-wide md:hidden">
+              {entry.title}
+            </span>
+          </button>
+        );
+        return (
+          <Tooltip key={entry.id}>
+            <TooltipTrigger asChild>{button}</TooltipTrigger>
+            <TooltipContent side={side === "layers" ? "right" : "left"}>{label}</TooltipContent>
+          </Tooltip>
+        );
+      })}
     </aside>
   );
 

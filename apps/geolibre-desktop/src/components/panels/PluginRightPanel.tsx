@@ -8,7 +8,7 @@ import {
   type RightPanelDock,
   setActiveRightPanelDock,
 } from "@geolibre/plugins";
-import { Button } from "@geolibre/ui";
+import { Button, Tooltip, TooltipContent, TooltipTrigger } from "@geolibre/ui";
 import {
   ArrowLeftToLine,
   ArrowRightToLine,
@@ -122,11 +122,15 @@ export function PluginRightPanel({ dock, contentEl, width, onWidthChange }: Plug
     wrapper.appendChild(contentEl);
   }, [matched, contentEl, collapsed]);
 
+  // Same restyle as SharedSidebar's rail (ghost + glow-active, icon-only with a
+  // tooltip at desktop widths instead of a boxed active state and a permanent
+  // rotated label) so a positional dock's collapsed rail reads as the same
+  // product as the shared one, not stock GeoLibre chrome.
   const panelRail =
     dockPanels.length > 0 ? (
       <aside
         aria-label={t("pluginPanel.collapsedLabel", { title: t("toolbar.menu.plugins") })}
-        className={`flex h-11 w-full shrink-0 items-center gap-1 overflow-x-auto border-t bg-card px-2 md:h-auto md:w-11 md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-t-0 md:px-0 md:py-2 ${isLayersSide ? "md:border-e" : "md:border-s"}`}
+        className={`intel-hairline flex h-11 w-full shrink-0 items-center gap-1 overflow-x-auto border-t bg-background px-2 md:h-auto md:w-11 md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-t-0 md:px-0 md:py-2 ${isLayersSide ? "md:border-e" : "md:border-s"}`}
       >
         {dockPanels.map((candidate) => {
           const candidateIcon =
@@ -137,20 +141,24 @@ export function PluginRightPanel({ dock, contentEl, width, onWidthChange }: Plug
             ) : (
               <PanelRight className="h-4 w-4" />
             );
+          const label = t("sharedRail.expand", { title: candidate.title });
           return (
-            <button
-              key={candidate.id}
-              type="button"
-              title={t("sharedRail.expand", { title: candidate.title })}
-              aria-label={t("sharedRail.expand", { title: candidate.title })}
-              onClick={() => openRightPanel(candidate.id)}
-              className="flex items-center gap-2 rounded px-1.5 py-1.5 text-muted-foreground hover:bg-accent/50 hover:text-foreground md:flex-col md:px-1 md:py-2"
-            >
-              {candidateIcon}
-              <span className="text-[10px] font-semibold uppercase tracking-wide md:[writing-mode:vertical-rl] md:rotate-180">
-                {candidate.title}
-              </span>
-            </button>
+            <Tooltip key={candidate.id}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={label}
+                  onClick={() => openRightPanel(candidate.id)}
+                  className="flex items-center gap-2 rounded-lg px-1.5 py-1.5 text-muted-foreground transition-colors hover:text-foreground md:h-9 md:w-9 md:flex-col md:justify-center md:px-1 md:py-2"
+                >
+                  {candidateIcon}
+                  <span className="text-[10px] font-semibold uppercase tracking-wide md:hidden">
+                    {candidate.title}
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side={isLayersSide ? "right" : "left"}>{label}</TooltipContent>
+            </Tooltip>
           );
         })}
       </aside>
@@ -207,7 +215,11 @@ export function PluginRightPanel({ dock, contentEl, width, onWidthChange }: Plug
       <aside
         aria-label={panel.title}
         style={{ "--plugin-right-panel-width": `${width}px` } as CSSProperties}
-        className={`relative flex max-h-[min(24rem,42vh)] supports-[max-height:1dvh]:max-h-[min(24rem,42dvh)] w-full shrink-0 flex-col border-t bg-card max-md:absolute max-md:inset-x-0 max-md:bottom-0 max-md:z-30 max-md:shadow-xl md:max-h-none md:w-[var(--plugin-right-panel-width)] md:border-t-0 ${borderSide}`}
+        // `bg-card/40` + `shadow-lg` in place of a flat `bg-card`: the same
+        // slightly translucent surface and elevation `PanelFrame` uses for the
+        // console's own panels, so a panel docked here reads as the same
+        // product rather than stock GeoLibre chrome sitting beside it.
+        className={`intel-hairline relative flex max-h-[min(24rem,42vh)] supports-[max-height:1dvh]:max-h-[min(24rem,42dvh)] w-full shrink-0 flex-col border-t bg-card/40 shadow-lg max-md:absolute max-md:inset-x-0 max-md:bottom-0 max-md:z-30 max-md:shadow-xl md:max-h-none md:w-[var(--plugin-right-panel-width)] md:border-t-0 ${borderSide}`}
       >
         <div
           role="separator"
@@ -216,15 +228,15 @@ export function PluginRightPanel({ dock, contentEl, width, onWidthChange }: Plug
           className={`absolute ${isLayersSide ? "-end-1 border-e" : "-start-1 border-s"} top-0 z-20 hidden h-full w-2 cursor-col-resize touch-none select-none border-transparent hover:border-primary md:block`}
           onPointerDown={handleResizeStart}
         />
-        <div className="flex items-center justify-between border-b px-3 py-1.5">
-          <span className="truncate text-sm font-semibold">{panel.title}</span>
+        <div className="intel-hairline flex h-9 items-center justify-between border-b px-3">
+          <span className="intel-label truncate">{panel.title}</span>
           <div className="flex items-center gap-1">
             {!isSharedRail ? (
               <>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7"
+                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
                   title={t("pluginPanel.moveLeft")}
                   aria-label={t("pluginPanel.moveLeft")}
                   disabled={!canMoveLeft}
@@ -235,7 +247,7 @@ export function PluginRightPanel({ dock, contentEl, width, onWidthChange }: Plug
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7"
+                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
                   title={t("pluginPanel.moveRight")}
                   aria-label={t("pluginPanel.moveRight")}
                   disabled={!canMoveRight}
@@ -251,7 +263,7 @@ export function PluginRightPanel({ dock, contentEl, width, onWidthChange }: Plug
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground"
                 title={t("pluginPanel.detach")}
                 aria-label={t("pluginPanel.detach")}
                 onClick={() =>
@@ -267,7 +279,7 @@ export function PluginRightPanel({ dock, contentEl, width, onWidthChange }: Plug
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground"
                 title={
                   isLayersSide
                     ? t("pluginPanel.mergeIntoLayersRail")
@@ -288,7 +300,7 @@ export function PluginRightPanel({ dock, contentEl, width, onWidthChange }: Plug
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground"
               title={t("pluginPanel.collapse")}
               aria-label={t("pluginPanel.collapse")}
               onClick={() => collapseRightPanel(activeId)}
@@ -302,7 +314,7 @@ export function PluginRightPanel({ dock, contentEl, width, onWidthChange }: Plug
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground"
               title={t("pluginPanel.close")}
               aria-label={t("pluginPanel.close")}
               onClick={() => closeRightPanel(activeId)}

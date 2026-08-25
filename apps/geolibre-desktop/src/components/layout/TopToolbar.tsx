@@ -45,8 +45,6 @@ import {
   DECK_VIZ_PLUGIN_ID,
   DIRECTIONS_PLUGIN_ID,
   GRATICULE_PLUGIN_ID,
-  CLOUDS_PLUGIN_ID,
-  PRECIPITATION_PLUGIN_ID,
   REVERSE_GEOCODE_PLUGIN_ID,
   EFFECTS_PLUGIN_ID,
   openRightPanel,
@@ -90,7 +88,6 @@ import type { ProjectFileActions } from "../../hooks/useProjectFileActions";
 import { useToolbarPanels } from "../../hooks/useToolbarPanels";
 import { useVectorTileGeometryBackfill } from "../../hooks/useVectorTileGeometryBackfill";
 import type { ThemeMode } from "../../hooks/useThemeMode";
-import { INTEL_USING_FIXTURES } from "../../lib/intel/client";
 import { isMobile } from "../../lib/is-mobile";
 import { isTauri } from "../../lib/tauri-io";
 import { isMaptoolkitBasemapActive } from "../../lib/maptoolkit-basemap";
@@ -1695,8 +1692,6 @@ export function TopToolbar({
           plugin.id !== DIRECTIONS_PLUGIN_ID &&
           plugin.id !== REVERSE_GEOCODE_PLUGIN_ID &&
           plugin.id !== GRATICULE_PLUGIN_ID &&
-          plugin.id !== CLOUDS_PLUGIN_ID &&
-          plugin.id !== PRECIPITATION_PLUGIN_ID &&
           plugin.id !== DECK_VIZ_PLUGIN_ID,
       )
       .map((plugin) => ({
@@ -1797,16 +1792,6 @@ export function TopToolbar({
             console with no identity anywhere on screen. */}
         <span className="hidden sm:inline">{appTitle}</span>
       </span>
-      {/* Every console panel currently renders fixture data. A dense,
-          confident-looking intelligence display built on invented numbers is
-          genuinely misleading -- someone will screenshot it -- so the state is
-          stated in permanent chrome rather than a tooltip, and it disappears on
-          its own when the flag flips. */}
-      {INTEL_USING_FIXTURES ? (
-        <span className="intel-label intel-sev-high me-1 hidden shrink-0 border-s border-border/60 ps-2 md:inline">
-          Sample data
-        </span>
-      ) : null}
       {/* Layers lives on this bar rather than in a sidebar: the left dock is the
           intelligence column now, and layer management is an occasional task
           that does not need permanent screen width. */}
@@ -1893,8 +1878,6 @@ export function TopToolbar({
           directionsActive={isActive(DIRECTIONS_PLUGIN_ID)}
           reverseGeocodeActive={isActive(REVERSE_GEOCODE_PLUGIN_ID)}
           graticuleActive={isActive(GRATICULE_PLUGIN_ID)}
-          cloudsActive={isActive(CLOUDS_PLUGIN_ID)}
-          precipitationActive={isActive(PRECIPITATION_PLUGIN_ID)}
           onToggleMapControl={toggleMapControl}
           onToggleEffects={() => toggle(EFFECTS_PLUGIN_ID, appApi)}
           getEffectsSettings={getEffectsSettings}
@@ -1904,8 +1887,6 @@ export function TopToolbar({
           onToggleReverseGeocode={consent.handleToggleReverseGeocode}
           onToggleGraticule={() => toggle(GRATICULE_PLUGIN_ID, appApi)}
           onTogglePointerElevation={consent.handleTogglePointerElevation}
-          onToggleClouds={() => toggle(CLOUDS_PLUGIN_ID, appApi)}
-          onTogglePrecipitation={() => toggle(PRECIPITATION_PLUGIN_ID, appApi)}
           onOpenFieldCollection={() => setFieldCollectionOpen(true)}
           onOpenGpsTracking={() => setGpsTrackingOpen(true)}
           onOpenRecordTour={() => setRecordTourOpen(true)}

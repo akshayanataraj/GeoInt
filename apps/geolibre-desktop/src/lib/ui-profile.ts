@@ -650,16 +650,6 @@ export const MENU_ITEM_CATALOG: readonly MenuItemCatalogEntry[] = [
     labelKey: "toolbar.item.pointerElevation",
     tier: "intermediate",
   },
-  // Id kept as `controls.clouds` (not renamed to `controls.weather`) so a
-  // persisted `hiddenMenuItems: ["controls.clouds"]` from before the Clouds →
-  // Weather rename keeps hiding this (now Weather) submenu instead of silently
-  // reappearing. Hiding it hides both weather overlays, which is the intent.
-  {
-    id: "controls.clouds",
-    menuId: "controls",
-    labelKey: "toolbar.item.weather",
-    tier: "intermediate",
-  },
   {
     id: "controls.directions",
     menuId: "controls",

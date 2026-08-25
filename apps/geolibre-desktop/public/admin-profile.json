@@ -4,8 +4,7 @@
     "processing.whitebox",
     "processing.earthEngine",
     "controls.fieldCollection",
-    "controls.flightSimulator",
-    "settings.ai"
+    "controls.flightSimulator"
   ],
   "lock": true
 }

@@ -2,20 +2,10 @@ import { useAppStore } from "@geolibre/core";
 import {
   DEFAULT_EFFECTS_SETTINGS,
   type EffectsSettings,
-  getCloudsAnimationState,
-  getPrecipitationAnimationState,
   HALO_EXTENT_MAX,
   HALO_EXTENT_MIN,
   HALO_OPACITY_MAX,
   HALO_OPACITY_MIN,
-  setCloudsFrame,
-  setPrecipitationFrame,
-  subscribeClouds,
-  subscribePrecipitation,
-  toggleCloudsPlaying,
-  togglePrecipitationPlaying,
-  type WeatherAnimationState,
-  type WeatherLayerController,
 } from "@geolibre/plugins";
 import {
   Button,
@@ -68,8 +58,6 @@ interface ControlsMenuProps {
   directionsActive: boolean;
   reverseGeocodeActive: boolean;
   graticuleActive: boolean;
-  cloudsActive: boolean;
-  precipitationActive: boolean;
   onToggleMapControl: (control: ToolbarMapControl) => void;
   onToggleEffects: () => void;
   getEffectsSettings: () => EffectsSettings;
@@ -79,8 +67,6 @@ interface ControlsMenuProps {
   onToggleReverseGeocode: () => void;
   onToggleGraticule: () => void;
   onTogglePointerElevation: () => void;
-  onToggleClouds: () => void;
-  onTogglePrecipitation: () => void;
   onOpenFieldCollection: () => void;
   onOpenGpsTracking: () => void;
   onOpenRecordTour: () => void;
@@ -97,8 +83,6 @@ export function ControlsMenu({
   directionsActive,
   reverseGeocodeActive,
   graticuleActive,
-  cloudsActive,
-  precipitationActive,
   onToggleMapControl,
   onToggleEffects,
   getEffectsSettings,
@@ -108,8 +92,6 @@ export function ControlsMenu({
   onToggleReverseGeocode,
   onToggleGraticule,
   onTogglePointerElevation,
-  onToggleClouds,
-  onTogglePrecipitation,
   onOpenFieldCollection,
   onOpenGpsTracking,
   onOpenRecordTour,
@@ -158,7 +140,6 @@ export function ControlsMenu({
   const anyTopControls =
     MAP_CONTROL_ITEMS.some((control) => show(`controls.mapControl.${control.id}`)) ||
     show("controls.atmosphereEffects") ||
-    show("controls.clouds") ||
     show("controls.spinGlobe") ||
     show("controls.graticule") ||
     show("controls.pointerElevation") ||
@@ -222,14 +203,6 @@ export function ControlsMenu({
               getSettings={getEffectsSettings}
               onPreview={onPreviewEffectsSettings}
               onCommit={onCommitEffectsSettings}
-            />
-          )}
-          {show("controls.clouds") && (
-            <WeatherSubmenu
-              cloudsActive={cloudsActive}
-              onToggleClouds={onToggleClouds}
-              precipitationActive={precipitationActive}
-              onTogglePrecipitation={onTogglePrecipitation}
             />
           )}
           {show("controls.sun") && (
@@ -606,173 +579,6 @@ function AtmosphereEffectsSubmenu({
         >
           {t("toolbar.atmosphere.reset")}
         </DropdownMenuItem>
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
-  );
-}
-
-interface WeatherSubmenuProps {
-  cloudsActive: boolean;
-  onToggleClouds: () => void;
-  precipitationActive: boolean;
-  onTogglePrecipitation: () => void;
-}
-
-/**
- * The Weather submenu: groups the Clouds and Precipitation overlays. Each nested
- * item is a {@link WeatherLayerSubmenu} with its own on/off toggle and time-scrub
- * animation. The overlays themselves live in the Layers panel as normal tile
- * layers (with their own visibility/opacity); these submenus only drive the
- * animation.
- */
-function WeatherSubmenu({
-  cloudsActive,
-  onToggleClouds,
-  precipitationActive,
-  onTogglePrecipitation,
-}: WeatherSubmenuProps) {
-  const { t } = useTranslation();
-  return (
-    <DropdownMenuSub>
-      <DropdownMenuSubTrigger title={t("toolbar.item.weatherTooltip")}>
-        {t("toolbar.item.weather")}
-        {/* Aggregate indicator so an active overlay shows without opening the
-            submenu (parity with the old top-level Clouds entry). */}
-        {cloudsActive || precipitationActive ? " ✓" : ""}
-      </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent>
-        <WeatherLayerSubmenu
-          label={t("toolbar.item.clouds")}
-          showLabel={t("toolbar.item.cloudsShow")}
-          tooltip={t("toolbar.item.cloudsTooltip")}
-          sliderLabel={t("toolbar.item.cloudsDate")}
-          active={cloudsActive}
-          onToggle={onToggleClouds}
-          controller={CLOUDS_CONTROLLER}
-        />
-        <WeatherLayerSubmenu
-          label={t("toolbar.item.precipitation")}
-          showLabel={t("toolbar.item.precipitationShow")}
-          tooltip={t("toolbar.item.precipitationTooltip")}
-          sliderLabel={t("toolbar.item.precipitationTime")}
-          active={precipitationActive}
-          onToggle={onTogglePrecipitation}
-          controller={PRECIPITATION_CONTROLLER}
-        />
-      </DropdownMenuSubContent>
-    </DropdownMenuSub>
-  );
-}
-
-/** The plugin animation hooks a {@link WeatherLayerSubmenu} drives. */
-// The subset of the plugin's WeatherLayerController this submenu drives (the
-// activate/deactivate lifecycle is the plugin's, not the menu's). Derived via
-// Pick so it can't drift from the exported type.
-type WeatherControllerHandle = Pick<
-  WeatherLayerController,
-  "getState" | "setFrame" | "togglePlaying" | "subscribe"
->;
-
-// Stable module-level controllers so each submenu's subscribe effect runs once.
-const CLOUDS_CONTROLLER: WeatherControllerHandle = {
-  getState: getCloudsAnimationState,
-  setFrame: setCloudsFrame,
-  togglePlaying: toggleCloudsPlaying,
-  subscribe: subscribeClouds,
-};
-const PRECIPITATION_CONTROLLER: WeatherControllerHandle = {
-  getState: getPrecipitationAnimationState,
-  setFrame: setPrecipitationFrame,
-  togglePlaying: togglePrecipitationPlaying,
-  subscribe: subscribePrecipitation,
-};
-
-interface WeatherLayerSubmenuProps {
-  label: string;
-  showLabel: string;
-  tooltip: string;
-  sliderLabel: string;
-  active: boolean;
-  onToggle: () => void;
-  controller: WeatherControllerHandle;
-}
-
-/**
- * A single Weather overlay submenu: an on/off toggle plus a time-scrub animation
- * (play/pause + a frame slider). Animation state lives in module state in the
- * plugin, so this mirrors it locally — seeded on mount/open and refreshed via
- * the controller's subscribe so the slider tracks playback frame by frame.
- */
-function WeatherLayerSubmenu({
-  label,
-  showLabel,
-  tooltip,
-  sliderLabel,
-  active,
-  onToggle,
-  controller,
-}: WeatherLayerSubmenuProps) {
-  const { t } = useTranslation();
-  const [anim, setAnim] = useState<WeatherAnimationState>(controller.getState);
-
-  useEffect(() => {
-    setAnim(controller.getState());
-    return controller.subscribe(() => setAnim(controller.getState()));
-  }, [controller]);
-
-  // Need at least two frames to animate/scrub; hide the Play + slider otherwise
-  // (a single-frame source can't animate, and startPlaying() would no-op).
-  const showAnimation = active && anim.labels.length > 1;
-
-  return (
-    <DropdownMenuSub
-      onOpenChange={(open: boolean) => {
-        if (open) setAnim(controller.getState());
-      }}
-    >
-      <DropdownMenuSubTrigger title={tooltip}>
-        {label}
-        {active ? " ✓" : ""}
-      </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="w-64">
-        <DropdownMenuItem
-          // onSelect (not onClick) fires for both mouse and keyboard
-          // (Enter/Space); preventDefault keeps the submenu open after toggling.
-          onSelect={(e: Event) => {
-            e.preventDefault();
-            onToggle();
-          }}
-        >
-          {showLabel}
-          {active ? " ✓" : ""}
-        </DropdownMenuItem>
-        {showAnimation && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={(e: Event) => {
-                e.preventDefault();
-                controller.togglePlaying();
-              }}
-            >
-              {anim.playing ? t("toolbar.item.weatherPause") : t("toolbar.item.weatherPlay")}
-            </DropdownMenuItem>
-            {/* Stop key events from reaching the menu's roving-focus/typeahead
-                handlers so the slider responds to arrow keys. */}
-            <div className="px-2 py-1.5" onKeyDown={(e) => e.stopPropagation()}>
-              <SliderRow
-                label={sliderLabel}
-                min={0}
-                max={anim.labels.length - 1}
-                step={1}
-                value={anim.index}
-                format={(v) => anim.labels[Math.round(v)] ?? ""}
-                onPreview={(v) => controller.setFrame(v)}
-                onCommit={() => {}}
-              />
-            </div>
-          </>
-        )}
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   );

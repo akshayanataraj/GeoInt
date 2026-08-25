@@ -37,7 +37,6 @@ describe("desktop settings URL", () => {
           uiProfile: { enabled: true, hiddenMenus: ["help", "help"] },
           shareToken: "remote-token-must-not-load",
           cesiumIonToken: "remote-cesium-token-must-not-load",
-          aiProfiles: [{ id: "remote", fieldValues: { API_KEY: "secret" } }],
           pluginManifestUrls: ["https://evil.example/plugin.json"],
           startup: { mode: "specific", projectPath: "/remote/path" },
         }),
@@ -55,7 +54,6 @@ describe("desktop settings URL", () => {
     assert.deepEqual(settings.uiProfile.hiddenMenus, ["help"]);
     assert.equal(settings.shareToken, "");
     assert.equal(settings.cesiumIonToken, "");
-    assert.deepEqual(settings.aiProfiles, []);
     assert.deepEqual(settings.pluginManifestUrls, []);
     assert.equal(settings.startup.mode, "default");
   });
