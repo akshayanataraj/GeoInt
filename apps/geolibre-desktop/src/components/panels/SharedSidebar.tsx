@@ -5,6 +5,7 @@ import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useRightPanelState } from "../../hooks/useRightPanels";
 import { isImageSource } from "../../lib/icon-source";
+import { RIGHT_PANEL_ICONS } from "../../lib/right-panel-icons";
 import { PluginRightPanel } from "./PluginRightPanel";
 
 /** Which built-in sidebar the plugin panel shares its rail with. */
@@ -123,12 +124,14 @@ export function SharedSidebar({
 
   const entries: RailEntry[] = panelIds.map((id) => {
     const panel = getRightPanel(id);
-    const icon =
-      panel?.icon && isImageSource(panel.icon) ? (
-        <img src={panel.icon} alt="" className="h-4 w-4 object-contain" />
-      ) : (
-        <PanelRight className="h-4 w-4" />
-      );
+    const KnownIcon = RIGHT_PANEL_ICONS[id];
+    const icon = KnownIcon ? (
+      <KnownIcon className="h-4 w-4" />
+    ) : panel?.icon && isImageSource(panel.icon) ? (
+      <img src={panel.icon} alt="" className="h-4 w-4 object-contain" />
+    ) : (
+      <PanelRight className="h-4 w-4" />
+    );
     const expanded = activeId === id && !collapsed;
     return {
       id,

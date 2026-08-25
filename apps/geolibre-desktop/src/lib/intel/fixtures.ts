@@ -9,9 +9,9 @@
  * Rules for anything added here:
  *
  * 1. It must satisfy the types in `contracts.ts` (real mirrors) or
- *    `s2-contracts.ts` (provisional). Fixtures that do not typecheck against
- *    the contract are worse than no fixtures, because they design the UI around
- *    a shape the server will never send.
+ *    `s2-contracts.ts` / `map-events-contract.ts` (provisional). Fixtures that
+ *    do not typecheck against the contract are worse than no fixtures, because
+ *    they design the UI around a shape the server will never send.
  * 2. No live-looking values. Timestamps are fixed strings, never `Date.now()`,
  *    so the UI is deterministic in tests and screenshots and nothing appears to
  *    be updating when it is not.
@@ -24,6 +24,7 @@
  */
 
 import type { ChatResponse, NewsTopic } from "./contracts";
+import type { ChatMapEvent } from "./map-events-contract";
 import type { S2Cell, S2Summary } from "./s2-contracts";
 
 /** Fixed reference instant for every timestamp below. */
@@ -235,3 +236,50 @@ export const FIXTURE_CHAT_RESPONSE: ChatResponse = {
   },
   timestamp: T0,
 };
+
+/**
+ * A sample event sequence for the chat-driven map playback (`ChatMapPlayback`,
+ * `chat-map-sequence.ts`), tied to the same rail-disruption narrative as
+ * `FIXTURE_CHAT_RESPONSE` -- three real points along the actual
+ * Amritsar-Ambala-Delhi rail corridor, dated to match `FIXTURE_NEWS_TOPICS[0]`'s
+ * timeline.
+ *
+ * This is the concrete case the plan's blocking dependency (§10) describes:
+ * the real backend has these dates on a timeline with no coordinates, and
+ * coordinates on a country centroid with no time. Nothing here is going to
+ * arrive from a live response until that is fixed, so it is invented in full
+ * -- coordinates included -- to demonstrate the frontend half of the feature
+ * now rather than waiting on that backend change.
+ */
+export const FIXTURE_CHAT_MAP_EVENTS: readonly ChatMapEvent[] = [
+  {
+    id: "1",
+    lat: 31.634,
+    lng: 74.8723,
+    timestamp: "2026-08-23T05:00:00Z",
+    label: "Amritsar, Punjab",
+    description: "Heavy rainfall warning issued for the northern rail corridor.",
+    sourceUrl: "https://example.org/1",
+    severity: "warning",
+  },
+  {
+    id: "2",
+    lat: 30.3752,
+    lng: 76.7821,
+    timestamp: "2026-08-24T07:30:00Z",
+    label: "Ambala, Haryana",
+    description: "Track inspection begins along the affected stretch.",
+    sourceUrl: "https://example.org/2",
+    severity: "warning",
+  },
+  {
+    id: "3",
+    lat: 28.6139,
+    lng: 77.209,
+    timestamp: "2026-08-25T04:00:00Z",
+    label: "New Delhi",
+    description: "Freight services suspended pending further inspection.",
+    sourceUrl: "https://example.org/3",
+    severity: "critical",
+  },
+];

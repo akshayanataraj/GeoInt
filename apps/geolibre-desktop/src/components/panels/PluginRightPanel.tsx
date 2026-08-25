@@ -30,6 +30,7 @@ import { useTranslation } from "react-i18next";
 import { useRightPanelState } from "../../hooks/useRightPanels";
 import { clamp } from "../../lib/clamp";
 import { isImageSource } from "../../lib/icon-source";
+import { RIGHT_PANEL_ICONS } from "../../lib/right-panel-icons";
 
 export const PLUGIN_PANEL_DEFAULT_WIDTH = 320;
 const MIN_WIDTH = 240;
@@ -84,6 +85,10 @@ export function PluginRightPanel({ dock, contentEl, width, onWidthChange }: Plug
   const contentRef = useRef<HTMLDivElement | null>(null);
 
   const panel = activeId ? getRightPanel(activeId) : undefined;
+  // Only known here for the app's own Comments/Analyst Chat panels (see
+  // `right-panel-icons.tsx`); third-party plugins get no header icon rather
+  // than a generic placeholder, matching this header's existing behaviour.
+  const HeaderIcon = activeId ? RIGHT_PANEL_ICONS[activeId] : undefined;
   const matched = activeId !== null && panel != null && activeDock === dock;
   // Layers-side docks sit to the left: their border and resize handle face right
   // (toward the map). Style-side docks face left (toward the map). The
@@ -228,8 +233,11 @@ export function PluginRightPanel({ dock, contentEl, width, onWidthChange }: Plug
           className={`absolute ${isLayersSide ? "-end-1 border-e" : "-start-1 border-s"} top-0 z-20 hidden h-full w-2 cursor-col-resize touch-none select-none border-transparent hover:border-primary md:block`}
           onPointerDown={handleResizeStart}
         />
-        <div className="intel-hairline flex h-9 items-center justify-between border-b px-3">
-          <span className="intel-label truncate">{panel.title}</span>
+        <div className="intel-hairline flex h-9 items-center gap-2 border-b px-3">
+          {HeaderIcon ? (
+            <HeaderIcon className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+          ) : null}
+          <span className="intel-label min-w-0 flex-1 truncate">{panel.title}</span>
           <div className="flex items-center gap-1">
             {!isSharedRail ? (
               <>

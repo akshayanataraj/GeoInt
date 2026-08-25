@@ -15,6 +15,11 @@ import {
 } from "react";
 import { sendChatMessage } from "../../lib/intel/client";
 import type { ChatResponse, Citation } from "../../lib/intel/contracts";
+import {
+  setChatMapActiveIndex,
+  setChatMapSequence,
+} from "../../lib/intel/chat-map-sequence";
+import type { ChatMapEvent } from "../../lib/intel/map-events-contract";
 import { AnswerText } from "./AnswerText";
 
 /**
@@ -37,10 +42,24 @@ import { AnswerText } from "./AnswerText";
  * implementations. When unified chat lands, the selector goes away and the rest
  * of this file stays.
  *
- * Not implemented, because the server does not offer it: streaming. The request
- * schema carries a `stream` flag, but the handler is a synchronous function
- * returning a complete response with no SSE, so a turn resolves once. Nothing
- * here should be restructured around incremental tokens until that changes.
+ * Not implemented, because the server does not offer it: real streaming. The
+ * request schema carries a `stream` flag, but the handler is a synchronous
+ * function returning a complete response with no SSE, so `sendChatMessage`
+ * resolves once with everything already in hand.
+ *
+ * What *is* implemented on top of that single round-trip is a client-side
+ * *simulated* generation: once the fixture response lands, the answer text
+ * reveals word by word and `ChatMapPlayback` flies the map through the
+ * response's event sequence (see `chat-map-sequence.ts`), both driven off one
+ * shared progress ramp so they finish together. This stands in for the real
+ * tool-calling flow the plan drafted (`render_map_events`, UI_REPURPOSE_PLAN.md
+ * §10): a model with native function-calling would call that tool mid-turn as
+ * it resolves each event's coordinates, and the frontend executor would upsert
+ * them into the map as they arrive. There is no such model in the loop here --
+ * this chat is a plain fetch, not an agent loop, and GeoLibre's own tool-calling
+ * machinery was removed with its AI Assistant -- so the reveal is played out
+ * against the complete fixture response instead of real incremental tool
+ * calls. The animation is genuine; the "generation" it is timed to is not.
  *
  * Renders as bare content, no header or close button of its own: this panel is
  * mounted inside GeoLibre's shared Style rail (see `useRegisterAnalystChatPanel`
@@ -69,7 +88,20 @@ interface Turn {
   query: string;
   /** Null while the request is in flight. */
   response: ChatResponse | null;
+  /** This turn's map sequence, empty until the response lands. */
+  mapEvents: readonly ChatMapEvent[];
+  /**
+   * How many words of `response.answer` are shown so far. 0 the instant the
+   * response lands, climbing to the full word count as the simulated
+   * generation plays out; meaningless (and unused) while `response` is null.
+   */
+  revealedWords: number;
   error: string | null;
+}
+
+/** Roughly how long the simulated generation takes for an answer this long. */
+function revealDurationMs(wordCount: number): number {
+  return Math.max(2200, wordCount * 90);
 }
 
 export function IntelChatPanel() {
@@ -79,6 +111,10 @@ export function IntelChatPanel() {
   const [pending, setPending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const nextKey = useRef(0);
+  // Cancels whichever turn's reveal loop is currently running, so starting a
+  // new question can never leave a stale rAF loop fighting the new one over
+  // the shared chat-map-sequence store (only one turn should ever drive it).
+  const cancelRevealRef = useRef<() => void>(() => {});
 
   // Follow the tail as turns arrive. Depends on the turn count rather than the
   // array so a mutation within an existing turn (the response landing) also
@@ -88,21 +124,71 @@ export function IntelChatPanel() {
     if (node) node.scrollTop = node.scrollHeight;
   }, [turns.length, pending]);
 
+  // Stop the reveal loop if the panel unmounts mid-animation (e.g. the user
+  // collapses Chat back onto the shared rail -- GeoLibre unmounts a
+  // shared-rail panel's content while collapsed, it is not just hidden).
+  // Deliberately does not clear the map sequence: the sequence is meant to sit
+  // on the map as standing context until the next question, not disappear the
+  // moment the panel that started it closes.
+  useEffect(() => () => cancelRevealRef.current(), []);
+
+  /**
+   * Plays the simulated generation for one turn: reveals `response.answer`
+   * word by word while stepping `ChatMapPlayback` through `mapEvents`, both
+   * driven off the same 0..1 progress ramp so they finish together. See the
+   * module docstring for what this stands in for and why.
+   */
+  const playReveal = (key: number, answer: string, mapEvents: readonly ChatMapEvent[]) => {
+    cancelRevealRef.current();
+    setChatMapSequence(mapEvents);
+
+    const words = answer.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return;
+    const durationMs = revealDurationMs(words.length);
+    const startedAt = performance.now();
+    let cancelled = false;
+    let frame = 0;
+
+    const tick = () => {
+      if (cancelled) return;
+      const progress = Math.min(1, (performance.now() - startedAt) / durationMs);
+      setTurns((current) =>
+        current.map((turn) =>
+          turn.key === key
+            ? { ...turn, revealedWords: Math.round(progress * words.length) }
+            : turn,
+        ),
+      );
+      if (mapEvents.length > 0) {
+        setChatMapActiveIndex(Math.min(mapEvents.length - 1, Math.floor(progress * mapEvents.length)));
+      }
+      if (progress < 1) {
+        frame = requestAnimationFrame(tick);
+      }
+    };
+    frame = requestAnimationFrame(tick);
+    cancelRevealRef.current = () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
+  };
+
   const submit = async () => {
     const query = draft.trim();
     if (!query || pending) return;
     const key = nextKey.current++;
     setTurns((current) => [
       ...current,
-      { key, query, response: null, error: null },
+      { key, query, response: null, mapEvents: [], revealedWords: 0, error: null },
     ]);
     setDraft("");
     setPending(true);
     try {
-      const response = await sendChatMessage(query);
+      const { response, mapEvents } = await sendChatMessage(query);
       setTurns((current) =>
-        current.map((turn) => (turn.key === key ? { ...turn, response } : turn))
+        current.map((turn) => (turn.key === key ? { ...turn, response, mapEvents } : turn)),
       );
+      playReveal(key, response.answer, mapEvents);
     } catch (cause) {
       setTurns((current) =>
         current.map((turn) =>
@@ -236,7 +322,7 @@ function TurnView({ turn }: { turn: Turn }) {
           {turn.error}
         </p>
       ) : turn.response ? (
-        <ResponseView response={turn.response} />
+        <ResponseView response={turn.response} revealedWords={turn.revealedWords} />
       ) : (
         <p className="text-[11px] text-muted-foreground">
           <span className="geoint-pulse">Retrieving…</span>
@@ -246,7 +332,20 @@ function TurnView({ turn }: { turn: Turn }) {
   );
 }
 
-function ResponseView({ response }: { response: ChatResponse }) {
+function ResponseView({
+  response,
+  revealedWords,
+}: {
+  response: ChatResponse;
+  revealedWords: number;
+}) {
+  // Sliced on whitespace, not characters, so a citation marker like "[1]" is
+  // always revealed atomically -- never as a dangling "[" one frame before the
+  // "1]" -- and so this can never split mid-word.
+  const words = response.answer.split(/\s+/).filter(Boolean);
+  const visibleText = words.slice(0, revealedWords).join(" ");
+  const revealing = revealedWords < words.length;
+
   return (
     <div className="space-y-2">
       {/* Degradations first, above the answer. The service's contract is that a
@@ -269,13 +368,22 @@ function ResponseView({ response }: { response: ChatResponse }) {
         </ul>
       ) : null}
 
-      <AnswerText text={response.answer} citations={response.citations} />
+      <AnswerText text={visibleText} citations={response.citations} />
+      {revealing ? (
+        <span
+          aria-hidden
+          className="geoint-pulse inline-block h-3 w-1 translate-y-0.5 bg-primary"
+        />
+      ) : null}
 
-      {response.citations.length > 0 ? (
+      {/* Citations and provenance land once the reveal finishes, reading as
+          "here is the answer, and here is what backs it up" rather than
+          appearing fully formed while the answer above is still filling in. */}
+      {!revealing && response.citations.length > 0 ? (
         <CitationList citations={response.citations} />
       ) : null}
 
-      <Provenance response={response} />
+      {!revealing ? <Provenance response={response} /> : null}
     </div>
   );
 }

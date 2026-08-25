@@ -156,6 +156,7 @@ import { KnowledgeCardPanel, type KnowledgePlace } from "./KnowledgeCardPanel";
 import { KnowledgeCardConsentDialog } from "./KnowledgeCardConsentDialog";
 import { MapGrid } from "./MapGrid";
 import { RemoteCursorsOverlay } from "./RemoteCursorsOverlay";
+import { ChatMapPlayback } from "../intel/ChatMapPlayback";
 import { useCommandBridge } from "../../hooks/useCommandBridge";
 import { useEmbedApi } from "../../hooks/useEmbedApi";
 import { appendDiagnostic, useDiagnosticsSnapshot } from "../../lib/diagnostics";
@@ -2284,6 +2285,7 @@ export function DesktopShell({
                 onControllerReady={handleMapControllerReady}
               />
               <RemoteCursorsOverlay mapControllerRef={mapControllerRef} />
+              <ChatMapPlayback mapControllerRef={mapControllerRef} />
               <CommentMapOverlay
                 mapControllerRef={mapControllerRef}
                 onSelectComment={(commentId) => {
