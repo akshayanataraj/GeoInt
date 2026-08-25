@@ -5,8 +5,10 @@
  * `geolibre://regional-basemap/<id>` sentinel that the map controller's
  * `resolveMapStyle` expands into a raster style at apply time (it is not a
  * fetchable URL). A separate sentinel prefix from the planetary one keeps the
- * two apart, because selecting a planetary basemap also switches the project's
- * celestial body, which must not happen here.
+ * two apart. Upstream needed that because selecting a planetary basemap also
+ * switched the project's celestial body; those basemaps are gone, but a stale
+ * project can still carry one of their sentinels, so the prefixes must stay
+ * distinct (see the regional-basemaps test).
  */
 
 /**

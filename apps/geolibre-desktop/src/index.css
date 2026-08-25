@@ -109,17 +109,101 @@ html:lang(fa) {
   }
 }
 
-/* Marks the active element in a control group (the mode dock's current mode)
-   without a bordered/filled box — UI_REPURPOSE_PLAN.md §2a rejected the
-   "boxed active tab" look explicitly. A ring plus a soft outer glow in
-   --primary reads as "lit up" rather than "selected inside a box", matching
-   the dark command-console reference. Must be an `@utility` (Tailwind's
-   utility layer), for the same cascade-layer-ordering reason `map-glass`
-   above is: an unlayered rule would beat `hover:` variants unpredictably. */
+/* Marks the active element in a control group (a lit rail toggle) without a
+   bordered/filled box — UI_REPURPOSE_PLAN.md §2a rejected the "boxed active
+   tab" look explicitly. A ring plus a soft outer glow in --primary reads as
+   "lit up" rather than "selected inside a box", matching the dark
+   command-console reference. Must be an `@utility` (Tailwind's utility layer),
+   for the same cascade-layer-ordering reason `map-glass` above is: an unlayered
+   rule would beat `hover:` variants unpredictably. */
 @utility glow-active {
   box-shadow:
     0 0 0 1px hsl(var(--primary) / 0.5),
     0 0 12px 0 hsl(var(--primary) / 0.35);
+}
+
+/* ── Intelligence console surface language ──────────────────────────────────
+   The console reads as instrumentation rather than as a document: dense rows,
+   hairline separation instead of cards nested in cards, and figures in a
+   monospace face so columns of numbers align and a changing value does not
+   reflow the row beside it.
+
+   Each of these is an `@utility` for the same cascade-layer reason as
+   `map-glass` and `glow-active`: unlayered rules would beat `hover:` and
+   `dark:` variants unpredictably. */
+
+/* A panel edge. Deliberately not Tailwind's `border`: at these densities a
+   full-strength border on every section turns a dock into a ladder of grey
+   lines, so this is a half-strength hairline that separates without asking to
+   be looked at. */
+@utility intel-hairline {
+  border-color: hsl(var(--border) / 0.6);
+}
+
+/* Faint graticule for surfaces that are otherwise empty — placeholder sheets
+   and the console backdrop. Two 1px gradients on a 32px pitch, at low enough
+   contrast to sit under text without competing with it, which is the only
+   reason this can be a background rather than a decorative element. */
+@utility intel-grid {
+  background-image:
+    linear-gradient(to right, hsl(var(--border) / 0.35) 1px, transparent 1px),
+    linear-gradient(to bottom, hsl(var(--border) / 0.35) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Figures: tabular so digits take equal width, monospace so a metric reads as
+   an instrument value rather than prose. `font-variant-numeric` matters more
+   than the family — without it a count ticking 99 → 100 shifts everything
+   after it. */
+@utility intel-numeral {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Small-caps structural label. The console's only use of letterspacing,
+   reserved for section headings so they read as chrome and never compete with
+   the data under them. */
+@utility intel-label {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Severity accents, mapped onto the existing --status-* tokens rather than new
+   colours, so severity and every other status signal in the app stay the same
+   hue — and so all of them inherit the contrast tuning already done on those
+   tokens (see globals.css). `routine` deliberately has no colour of its own:
+   "nothing unusual" should not draw the eye, so it takes muted foreground and
+   lets the three real bands carry all the signal. */
+@utility intel-sev-routine {
+  color: hsl(var(--muted-foreground));
+}
+@utility intel-sev-elevated {
+  color: hsl(var(--status-info));
+}
+@utility intel-sev-high {
+  color: hsl(var(--status-warning));
+}
+@utility intel-sev-critical {
+  color: hsl(var(--status-critical));
+}
+
+/* The same ladder as a background wash, for severity chips and meter fills. */
+@utility intel-sev-bg-routine {
+  background-color: hsl(var(--muted-foreground) / 0.15);
+}
+@utility intel-sev-bg-elevated {
+  background-color: hsl(var(--status-info) / 0.15);
+}
+@utility intel-sev-bg-high {
+  background-color: hsl(var(--status-warning) / 0.18);
+}
+@utility intel-sev-bg-critical {
+  background-color: hsl(var(--status-critical) / 0.2);
 }
 
 /* Elevation-tied shadow scale, replacing Tailwind's stock one. Each step maps to
@@ -3909,12 +3993,21 @@ html.dark .maplibregl-popup-anchor-right:has(.vector-control-popup) .maplibregl-
 }
 
 /* ---------------------------------------------------------------------------
- * Single-screen mode switcher (UI_REPURPOSE_PLAN.md §2, §2a): the fade-in for
- * a placeholder ModeScreen swapping in over the hidden (not unmounted)
- * DesktopShell. Kept as a plain keyframe rather than a Tailwind animation
- * utility/plugin, since none is a dependency here yet and this is one rule.
+ * Console motion (UI_REPURPOSE_PLAN.md §2, §2a).
+ *
+ * All three keyframes share one easing curve and a 160–220ms band. That is
+ * deliberate: a dock panel, an overlay sheet, and a fading-in surface should
+ * feel like the same mechanism moving, and anything slower than ~220ms starts
+ * to feel like waiting when an analyst is toggling panels repeatedly.
+ *
+ * Kept as plain keyframes rather than a Tailwind animation plugin, since none
+ * is a dependency here and these are a handful of rules.
+ *
+ * Every one is disabled under `prefers-reduced-motion` at the bottom. The
+ * panels also animate *in* only — a closing panel unmounts immediately, because
+ * an exit animation on a layout-affecting element makes the map resize twice.
  * ------------------------------------------------------------------------- */
-@keyframes geoint-mode-fade-in {
+@keyframes geoint-fade-in {
   from {
     opacity: 0;
     transform: translateY(4px) scale(0.99);
@@ -3925,12 +4018,82 @@ html.dark .maplibregl-popup-anchor-right:has(.vector-control-popup) .maplibregl-
   }
 }
 
-.geoint-mode-fade-in {
-  animation: geoint-mode-fade-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+.geoint-fade-in {
+  animation: geoint-fade-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Dock panels slide in from the edge they are docked to. Translating by a
+   fraction of the panel's own width (not a fixed pixel amount) keeps the motion
+   proportional whatever width the dock ends up at. */
+@keyframes geoint-dock-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-8%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes geoint-dock-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(8%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.geoint-dock-in-left {
+  animation: geoint-dock-in-left 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.geoint-dock-in-right {
+  animation: geoint-dock-in-right 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* An overlay sheet rises rather than slides, to read as "over the map" instead
+   of "beside it" — the same distinction the layout itself is making. */
+@keyframes geoint-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.geoint-sheet-in {
+  animation: geoint-sheet-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Live-feed indicator. A slow breath, not a blink: it should register as
+   "connected" in peripheral vision and never pull attention off the data. */
+@keyframes geoint-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.geoint-pulse {
+  animation: geoint-pulse 2.4s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .geoint-mode-fade-in {
+  .geoint-fade-in,
+  .geoint-dock-in-left,
+  .geoint-dock-in-right,
+  .geoint-sheet-in,
+  .geoint-pulse {
     animation: none;
   }
 }

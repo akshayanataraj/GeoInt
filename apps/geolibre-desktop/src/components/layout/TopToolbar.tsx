@@ -1,4 +1,4 @@
-import { DEFAULT_PROJECT_NAME, useAppStore } from "@geolibre/core";
+import { useAppStore } from "@geolibre/core";
 import { DEFAULT_BUILT_IN_CONTROL_VISIBILITY, type MapController } from "@geolibre/map";
 import {
   closeDuckDBLayerPanel,
@@ -59,26 +59,20 @@ import {
   Compass,
   Crosshair,
   Database,
-  FilePen,
   Mountain,
-  Users,
   FilePlus2,
   Folder,
   FolderGit2,
-  FolderOpen,
   Globe,
   Grid2x2,
   Info,
   Keyboard,
-  Link2,
   Map,
   MapPin,
   MessageSquare,
   Moon,
   Palette,
-  Printer,
   RefreshCw,
-  Save,
   Sparkles,
   Sun,
   Layers,
@@ -96,6 +90,7 @@ import type { ProjectFileActions } from "../../hooks/useProjectFileActions";
 import { useToolbarPanels } from "../../hooks/useToolbarPanels";
 import { useVectorTileGeometryBackfill } from "../../hooks/useVectorTileGeometryBackfill";
 import type { ThemeMode } from "../../hooks/useThemeMode";
+import { INTEL_USING_FIXTURES } from "../../lib/intel/client";
 import { isMobile } from "../../lib/is-mobile";
 import { isTauri } from "../../lib/tauri-io";
 import { isMaptoolkitBasemapActive } from "../../lib/maptoolkit-basemap";
@@ -119,12 +114,9 @@ import {
 } from "./add-data/open-add-data";
 import { AddNetcdfDialog } from "./AddNetcdfDialog";
 import { AboutDialog } from "./AboutDialog";
-import { NewProjectDialog } from "./NewProjectDialog";
 import { ManagePluginsDialog } from "./ManagePluginsDialog";
-import type { CollaborationApi } from "../../hooks/useCollaboration";
 import { SettingsDialog } from "./SettingsDialog";
 import { SetViewDialog } from "./SetViewDialog";
-import { PrintLayoutDialog } from "./PrintLayoutDialog";
 import { LoadFeaturesIntoEditorDialog } from "./LoadFeaturesIntoEditorDialog";
 import { FieldCollectionDialog } from "./FieldCollectionDialog";
 import { GpsTrackingDialog } from "./GpsTrackingDialog";
@@ -142,7 +134,6 @@ import { PluginsMenu } from "./toolbar/PluginsMenu";
 import { PluginToolbarMenus } from "./toolbar/PluginToolbarMenus";
 import { EARTH_ENGINE_AVAILABLE, ProcessingMenu } from "./toolbar/ProcessingMenu";
 import { ProjectFileDialogs } from "./toolbar/ProjectFileDialogs";
-import { ProjectMenu } from "./toolbar/ProjectMenu";
 import { googleEarthUrl, googleMapsUrl } from "../../lib/external-map-links";
 import {
   ADD_DATA_KIND_COMMANDS,
@@ -168,22 +159,22 @@ interface TopToolbarProps {
   mapControllerRef: React.RefObject<MapController | null>;
   mapReadyGeneration: number;
   showLabels?: boolean;
-  showProjectInfo?: boolean;
   themeMode: ThemeMode;
-  // Lifted to DesktopShell so the on-canvas status badge can share one live
-  // session (calling useCollaboration twice would open two sockets).
-  collaboration: CollaborationApi;
   // Lifted to DesktopShell so the toolbar and the Browser panel share one
   // instance — two would not coordinate their in-flight "open recent" aborts.
   projectFiles: ProjectFileActions;
   onOpenDiagnostics: () => void;
-  onOpenProjectHistory: () => void;
   onToggleThemeMode: () => void;
-  // Opens the Offline Basemap Extract panel, mounted in DesktopShell over the
-  // map so it can stay non-modal (the map is interactive for drawing a bbox).
-  onOpenBasemapExtract: () => void;
   /** Activates the map tool for placing an anchored review comment. */
   onAddComment: () => void;
+  /**
+   * Toggles the Layers overlay. Layers is reached from this bar rather than
+   * living in a sidebar: the left dock is the intelligence column now, and
+   * layer management is an occasional task that does not need permanent width.
+   */
+  onToggleLayers: () => void;
+  /** Whether that overlay is currently up, for the button's pressed state. */
+  layersOpen: boolean;
   viewer?: boolean;
 }
 
@@ -202,15 +193,13 @@ export function TopToolbar({
   mapControllerRef,
   mapReadyGeneration,
   showLabels = true,
-  showProjectInfo = true,
   themeMode,
-  collaboration,
   projectFiles,
   onOpenDiagnostics,
-  onOpenProjectHistory,
   onToggleThemeMode,
-  onOpenBasemapExtract,
   onAddComment,
+  onToggleLayers,
+  layersOpen,
   viewer = false,
 }: TopToolbarProps) {
   const { t, i18n } = useTranslation();
@@ -1036,16 +1025,11 @@ export function TopToolbar({
   const loadEditorFeaturesOpen = useAppStore((s) => s.ui.loadEditorFeaturesOpen);
   const loadEditorFeaturesLayerId = useAppStore((s) => s.ui.loadEditorFeaturesLayerId);
   const setPythonConsoleOpen = useAppStore((s) => s.setPythonConsoleOpen);
-  const setAssistantOpen = useAppStore((s) => s.setAssistantOpen);
-  const projectName = useAppStore((s) => s.projectName);
-  const projectPath = useAppStore((s) => s.projectPath);
   const projectGeneration = useAppStore((s) => s.projectGeneration);
-  const setProjectName = useAppStore((s) => s.setProjectName);
   // The Collaborate dialog's visibility lives in the store so the on-canvas
   // session-status badge can reopen it from outside this component tree (#754).
   // The dialog itself is rendered by DesktopShell (not here) so it survives
   // toolbar-hidden layouts; the toolbar only triggers it via this setter.
-  const setCollaborateDialogOpen = useAppStore((s) => s.setCollaborateDialogOpen);
 
   const {
     plugins,
@@ -1102,7 +1086,6 @@ export function TopToolbar({
 
   // Tracks an active IME composition so pressing Enter to confirm a CJK
   // candidate doesn't blur the project-name field mid-composition.
-  const projectNameComposingRef = useRef(false);
 
   const [controlsVisible, setControlsVisible] = useState<Record<ToolbarMapControl, boolean>>(() =>
     MAP_CONTROL_ITEMS.reduce(
@@ -1172,10 +1155,8 @@ export function TopToolbar({
   // jumps straight to the scenegraph layer type).
   const [addDataDeckVizKind, setAddDataDeckVizKind] = useState<string | undefined>(undefined);
   const [netcdfDialogOpen, setNetcdfDialogOpen] = useState(false);
-  const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
   const [managePluginsOpen, setManagePluginsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
-  const [printLayoutOpen, setPrintLayoutOpen] = useState(false);
   const [fieldCollectionOpen, setFieldCollectionOpen] = useState(false);
   const [gpsTrackingOpen, setGpsTrackingOpen] = useState(false);
   const [recordTourOpen, setRecordTourOpen] = useState(false);
@@ -1185,30 +1166,6 @@ export function TopToolbar({
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [checkForUpdatesRequest, setCheckForUpdatesRequest] = useState(0);
-
-  const resetRuntimeControlsForNewProject = () => {
-    closeMaplibreComponentControls(appApi);
-    closeRasterLayerPanel(appApi);
-    closeVectorLayerPanel(appApi);
-    closePlanetaryComputerPanel(appApi);
-    closeEarthEnginePanel(appApi);
-    closeThreeDTilesLayerPanel(appApi);
-    closeDuckDBLayerPanel(appApi);
-    getPluginManager().restoreProjectState(null, appApi, {
-      resetMissingSettings: true,
-    });
-
-    for (const control of ALL_BUILT_IN_CONTROL_IDS) {
-      mapControllerRef.current?.setBuiltInControlPosition(control, "top-right");
-    }
-    for (const control of ALL_BUILT_IN_CONTROL_IDS) {
-      mapControllerRef.current?.setBuiltInControlVisible(
-        control,
-        NEW_PROJECT_VISIBLE_BUILT_IN_CONTROLS.has(control),
-      );
-    }
-    setControlsVisible(newProjectToolbarControlVisibility());
-  };
 
   // The appApi-backed "add layer" handlers shared by the Add Data menu and the
   // command palette so each panel opens identically from both.
@@ -1280,68 +1237,6 @@ export function TopToolbar({
   // defined once. Only file operations get global shortcuts to avoid clobbering
   // MapLibre or browser keys; everything else is reachable through the palette.
   const commands: Command[] = [
-    // Project
-    {
-      id: "project.new",
-      title: t("toolbar.command.projectNew"),
-      group: t("toolbar.commandGroup.project"),
-      keywords: "create",
-      icon: FilePlus2,
-      shortcut: { key: "n", mod: true, shift: false },
-      run: () => setNewProjectDialogOpen(true),
-    },
-    {
-      id: "project.open-file",
-      title: t("toolbar.command.projectOpenFile"),
-      group: t("toolbar.commandGroup.project"),
-      keywords: "load",
-      icon: FolderOpen,
-      shortcut: { key: "o", mod: true, shift: false },
-      run: () => void projectFiles.handleOpenFromFile(),
-    },
-    {
-      id: "project.open-url",
-      title: t("toolbar.command.projectOpenUrl"),
-      group: t("toolbar.commandGroup.project"),
-      keywords: "load",
-      icon: Link2,
-      run: () => projectFiles.setProjectUrlDialogOpen(true),
-    },
-    {
-      id: "project.save",
-      title: t("toolbar.command.projectSave"),
-      group: t("toolbar.commandGroup.project"),
-      icon: Save,
-      shortcut: { key: "s", mod: true, shift: false },
-      run: () => void projectFiles.handleSave(),
-    },
-    {
-      id: "project.save-as",
-      title: t("toolbar.command.projectSaveAs"),
-      group: t("toolbar.commandGroup.project"),
-      icon: FilePen,
-      shortcut: { key: "s", mod: true, shift: true },
-      run: () => void projectFiles.handleSaveAs(),
-    },
-    // Only surfaced when live collaboration is configured (env flag).
-    ...(collaboration.enabled
-      ? [
-          {
-            id: "project.collaborate",
-            title: t("toolbar.command.projectCollaborate"),
-            group: t("toolbar.commandGroup.project"),
-            icon: Users,
-            run: () => setCollaborateDialogOpen(true),
-          },
-        ]
-      : []),
-    {
-      id: "project.print-layout",
-      title: t("toolbar.item.printLayoutEllipsis"),
-      group: t("toolbar.commandGroup.project"),
-      icon: Printer,
-      run: () => setPrintLayoutOpen(true),
-    },
     // Add Data
     {
       id: "add.vector",
@@ -1464,14 +1359,6 @@ export function TopToolbar({
       keywords: "python console pyodide script repl",
       icon: Wrench,
       run: () => setPythonConsoleOpen(true),
-    },
-    {
-      id: "proc.assistant",
-      title: t("toolbar.command.assistant"),
-      group: t("toolbar.commandGroup.processing"),
-      keywords: "assistant ai chat llm natural language gemini agent",
-      icon: Sparkles,
-      run: () => setAssistantOpen(true),
     },
     {
       id: "proc.geocode",
@@ -1878,11 +1765,11 @@ export function TopToolbar({
   // its trigger Button this class instead of `toolbarButtonClass`.
   const toolbarSecondaryButtonClass = cn(toolbarButtonClass, "hidden md:inline-flex");
   const toolbarIconClassName = cn("h-3.5 w-3.5", showLabels && "sm:me-1");
-  // "GeoLibre Desktop" is the *desktop* product name. `isTauri()` alone is true
-  // on iOS and Android too — where the app is named plain "GeoLibre" (the bundle
-  // name from tauri.ios.conf.json, the home-screen icon, and the store listing),
-  // so titling it "GeoLibre Desktop" there contradicts every other surface.
-  const appTitle = isTauri() && !isMobile() ? "GeoLibre Desktop" : "GeoLibre";
+  // This bar is the app's only top bar: the console frame around it deliberately
+  // adds none of its own, so the product name lives here. One name on every
+  // platform — unlike upstream, this is not shipped as a separately-named
+  // desktop product, so there is no "… Desktop" variant to distinguish.
+  const appTitle = "GeoInt";
   const renderToolbarLabel = (label: string) =>
     showLabels ? <span className="hidden sm:inline">{label}</span> : null;
   const chrome: ToolbarChrome = {
@@ -1905,33 +1792,37 @@ export function TopToolbar({
     >
       <span className="me-1 flex shrink-0 items-center gap-1.5 text-sm font-semibold text-primary md:me-2">
         <Map className="h-4 w-4" />
-        {showProjectInfo ? <span className="hidden sm:inline">{appTitle}</span> : null}
+        {/* Unconditional: this is the
+            only top bar in the app, so hiding the product name would leave the
+            console with no identity anywhere on screen. */}
+        <span className="hidden sm:inline">{appTitle}</span>
       </span>
-      {!viewer && isMenuVisible(uiProfile, "project") && (
-        <ProjectMenu
-          chrome={chrome}
-          collaborationEnabled={collaboration.enabled}
-          onNewProject={() => setNewProjectDialogOpen(true)}
-          onOpenFromFile={() => void projectFiles.handleOpenFromFile()}
-          onOpenFromUrl={() => projectFiles.setProjectUrlDialogOpen(true)}
-          onImportQgisProject={() => void projectFiles.handleImportQgisProject()}
-          onImportArcgisProject={() => void projectFiles.handleImportArcgisProject()}
-          onOpenRecent={(path) => {
-            void projectFiles.handleOpenRecent(path).then((error) => {
-              if (error) projectFiles.setActionError(error);
-            });
-          }}
-          onOpenHistory={onOpenProjectHistory}
-          onSave={() => void projectFiles.handleSave()}
-          onSaveAs={() => void projectFiles.handleSaveAs()}
-          onDuplicate={() => projectFiles.handleDuplicate()}
-          onSaveAsTemplate={() => projectFiles.handleSaveAsTemplate()}
-          onExportHtml={() => void projectFiles.handleExportHtml()}
-          onCollaborate={() => setCollaborateDialogOpen(true)}
-          onPrintLayout={() => setPrintLayoutOpen(true)}
-          onOpenOfflineBasemap={onOpenBasemapExtract}
-        />
-      )}
+      {/* Every console panel currently renders fixture data. A dense,
+          confident-looking intelligence display built on invented numbers is
+          genuinely misleading -- someone will screenshot it -- so the state is
+          stated in permanent chrome rather than a tooltip, and it disappears on
+          its own when the flag flips. */}
+      {INTEL_USING_FIXTURES ? (
+        <span className="intel-label intel-sev-high me-1 hidden shrink-0 border-s border-border/60 ps-2 md:inline">
+          Sample data
+        </span>
+      ) : null}
+      {/* Layers lives on this bar rather than in a sidebar: the left dock is the
+          intelligence column now, and layer management is an occasional task
+          that does not need permanent screen width. */}
+      {!viewer ? (
+        <Button
+          className={chrome.buttonClass}
+          variant="ghost"
+          size={chrome.buttonSize}
+          aria-pressed={layersOpen}
+          aria-label={t("sharedRail.layers")}
+          onClick={onToggleLayers}
+        >
+          <Layers className={chrome.iconClassName} />
+          {chrome.renderLabel(t("sharedRail.layers"))}
+        </Button>
+      ) : null}
       {!viewer && isMenuVisible(uiProfile, "edit") && (
         <EditMenu chrome={chrome} mapControllerRef={mapControllerRef} />
       )}
@@ -1970,12 +1861,6 @@ export function TopToolbar({
           onZoomOut={() => mapControllerRef.current?.zoomOut()}
         />
       )}
-      <NewProjectDialog
-        open={newProjectDialogOpen}
-        onOpenChange={setNewProjectDialogOpen}
-        onSaveCurrentProject={projectFiles.handleSave}
-        onProjectCreated={resetRuntimeControlsForNewProject}
-      />
       {!viewer && isMenuVisible(uiProfile, "addData") && (
         <AddDataMenu
           chrome={chrome}
@@ -2066,15 +1951,6 @@ export function TopToolbar({
           mapControllerRef={mapControllerRef}
         />
       )}
-      {/* Remount on every project load so the composer starts from the opened
-          project's saved layout instead of keeping the previous project's
-          settings and captured map (GeoLibre discussion #1992). */}
-      <PrintLayoutDialog
-        key={`print-layout-${projectGeneration}`}
-        open={printLayoutOpen}
-        onOpenChange={setPrintLayoutOpen}
-        mapControllerRef={mapControllerRef}
-      />
       {/* Field Collection and GPS Tracking add features and layers to the
           project, so they follow the Controls menu entries that open them out
           of the read-only viewer preset. Record Tour and Record Video below
@@ -2215,48 +2091,6 @@ export function TopToolbar({
             <Moon className="h-3.5 w-3.5" />
           )}
         </Button>
-        {showProjectInfo ? (
-          <>
-            <Input
-              aria-label={t("toolbar.item.projectName")}
-              className="hidden h-7 w-44 border-transparent px-2 text-xs shadow-none focus-visible:border-input md:block"
-              value={projectName}
-              readOnly={viewer}
-              onChange={(event) => {
-                if (viewer) return;
-                setProjectName(event.target.value);
-              }}
-              onKeyDown={(event) => {
-                if (
-                  event.key === "Enter" &&
-                  !projectNameComposingRef.current &&
-                  !event.nativeEvent.isComposing
-                ) {
-                  event.currentTarget.blur();
-                }
-              }}
-              onCompositionStart={() => {
-                projectNameComposingRef.current = true;
-              }}
-              onCompositionEnd={() => {
-                projectNameComposingRef.current = false;
-              }}
-              onBlur={(event) => {
-                if (viewer) return;
-                const nextName = event.target.value.trim();
-                // Persist the canonical, locale-independent default name; a
-                // translated string would otherwise be written into the saved
-                // project file and vary by UI language.
-                if (!nextName) setProjectName(DEFAULT_PROJECT_NAME);
-              }}
-            />
-            {projectPath ? (
-              <span className="hidden truncate lg:inline" title={projectPath}>
-                {projectPath}
-              </span>
-            ) : null}
-          </>
-        ) : null}
       </div>
     </header>
   );

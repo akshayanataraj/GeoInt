@@ -46,8 +46,6 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
-  FolderCog,
-  FolderTree,
   Languages,
   Locate,
   MapPinned,
@@ -98,7 +96,6 @@ import {
   type StartupSettings,
 } from "../../hooks/useDesktopSettings";
 import { useLanguage } from "../../hooks/useLanguage";
-import { BROWSER_PANEL_ID } from "../../hooks/useRegisterBrowserPanel";
 import { COMMENTS_PANEL_ID } from "../../hooks/useRegisterCommentsPanel";
 import { useRightPanelState } from "../../hooks/useRightPanels";
 import type { ThemeMode } from "../../hooks/useThemeMode";
@@ -505,16 +502,14 @@ export function SettingsDialog({
   // not download from.
   const languagePackHost = languagePackBaseUrl();
   const languagePackDownloadsEnabled = languagePackHost.length > 0;
-  // Browser and Comments are dockable right panels: the registry owns whether
-  // they are on screen and `registerPersistedRightPanel` mirrors that into
-  // `layout.browserPanelVisible` / `layout.commentsPanelVisible`, so the toggle
-  // no longer resets on every launch (#1935). Because the mirror is the single
-  // writer, moving the panel is all these controls have to do: the setting
-  // follows, so the two can never disagree about what the checkbox should say.
+  // Comments is a dockable right panel: the registry owns whether it is on
+  // screen and `registerPersistedRightPanel` mirrors that into
+  // `layout.commentsPanelVisible`, so the toggle no longer resets on every
+  // launch (#1935). Because the mirror is the single writer, moving the panel is
+  // all this control has to do: the setting follows, so the two can never
+  // disagree about what the checkbox should say.
   const rightPanelState = useRightPanelState();
-  const browserPanelOpen = rightPanelState.visibleIds.includes(BROWSER_PANEL_ID);
   const commentsPanelOpen = rightPanelState.visibleIds.includes(COMMENTS_PANEL_ID);
-  const toggleBrowserPanel = (show: boolean) => applyRightPanelVisibility(BROWSER_PANEL_ID, show);
   const toggleCommentsPanel = (show: boolean) => applyRightPanelVisibility(COMMENTS_PANEL_ID, show);
   // A field a deep-link asked us to focus once its section renders; cleared
   // after the focus lands so a later open without a focus request stays put.
@@ -1308,7 +1303,6 @@ export function SettingsDialog({
     // the registry owns what is on screen, so move it to match what was just
     // saved (a no-op for a panel already there, so an untouched Save cannot
     // collapse one the user had expanded).
-    applyRightPanelVisibility(BROWSER_PANEL_ID, draftDesktopSettings.layout.browserPanelVisible);
     applyRightPanelVisibility(COMMENTS_PANEL_ID, draftDesktopSettings.layout.commentsPanelVisible);
     setOpen(false);
   };
@@ -1487,17 +1481,6 @@ export function SettingsDialog({
               >
                 {t("settings.layout.showToolbarLabels")}
               </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem
-                checked={desktopSettings.layout.showProjectInfo}
-                onCheckedChange={(checked: boolean) =>
-                  updateSavedLayoutSettings({
-                    showProjectInfo: checked === true,
-                  })
-                }
-                onSelect={(event: Event) => event.preventDefault()}
-              >
-                {t("settings.layout.showProjectInfo")}
-              </DropdownMenuCheckboxItem>
               <DropdownMenuSeparator />
               <DropdownMenuCheckboxItem
                 checked={desktopSettings.layout.layerPanelVisible}
@@ -1520,13 +1503,6 @@ export function SettingsDialog({
                 onSelect={(event: Event) => event.preventDefault()}
               >
                 {t("settings.layout.showStylePanel")}
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem
-                checked={browserPanelOpen}
-                onCheckedChange={(checked: boolean) => toggleBrowserPanel(checked === true)}
-                onSelect={(event: Event) => event.preventDefault()}
-              >
-                {t("settings.layout.showBrowserPanel")}
               </DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem
                 checked={commentsPanelOpen}
@@ -2129,20 +2105,6 @@ export function SettingsDialog({
                       <Type className="h-4 w-4 text-muted-foreground" />
                       <span>{t("settings.layout.showToolbarLabels")}</span>
                     </label>
-                    <label className="flex items-center gap-3 rounded-md border p-3 text-sm">
-                      <input
-                        className="h-4 w-4"
-                        type="checkbox"
-                        checked={draftDesktopSettings.layout.showProjectInfo}
-                        onChange={(event) =>
-                          updateDraftLayoutSettings({
-                            showProjectInfo: event.target.checked,
-                          })
-                        }
-                      />
-                      <FolderCog className="h-4 w-4 text-muted-foreground" />
-                      <span>{t("settings.layout.showProjectInfoToolbar")}</span>
-                    </label>
                   </div>
                   <div className="space-y-3">
                     <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -2175,20 +2137,6 @@ export function SettingsDialog({
                       />
                       <PanelRight className="h-4 w-4 text-muted-foreground" />
                       <span>{t("settings.layout.showStylePanel")}</span>
-                    </label>
-                    <label className="flex items-center gap-3 rounded-md border p-3 text-sm">
-                      <input
-                        className="h-4 w-4"
-                        type="checkbox"
-                        checked={draftDesktopSettings.layout.browserPanelVisible}
-                        onChange={(event) =>
-                          updateDraftLayoutSettings({
-                            browserPanelVisible: event.target.checked,
-                          })
-                        }
-                      />
-                      <FolderTree className="h-4 w-4 text-muted-foreground" />
-                      <span>{t("settings.layout.showBrowserPanel")}</span>
                     </label>
                     <label className="flex items-center gap-3 rounded-md border p-3 text-sm">
                       <input

@@ -1,4 +1,4 @@
-import { DEFAULT_ELLIPSOID_ID, getPlanetaryBasemapByStyleUrl, useAppStore } from "@geolibre/core";
+import { useAppStore } from "@geolibre/core";
 import { useLayoutEffect } from "react";
 import { readLastBasemap, writeLastBasemap } from "../lib/last-basemap";
 
@@ -15,15 +15,10 @@ export function useLastBasemapPersistence(): void {
       state.projectPath === null &&
       !state.isDirty
     ) {
-      const ellipsoidId =
-        getPlanetaryBasemapByStyleUrl(storedBasemap)?.ellipsoidId ?? DEFAULT_ELLIPSOID_ID;
-      useAppStore.setState({
-        basemapStyleUrl: storedBasemap,
-        preferences: {
-          ...state.preferences,
-          map: { ...state.preferences.map, ellipsoidId },
-        },
-      });
+      // Upstream also re-derived the ellipsoid from the stored basemap here,
+      // since a planetary basemap implied a celestial body. Earth is the only
+      // body now, so the basemap is all there is to restore.
+      useAppStore.setState({ basemapStyleUrl: storedBasemap });
     }
 
     writeLastBasemap(useAppStore.getState().basemapStyleUrl);

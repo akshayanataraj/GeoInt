@@ -11,11 +11,9 @@ import {
   Sparkles,
   Square,
   Wrench,
-  X,
 } from "lucide-react";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
   type RefObject,
   useCallback,
   useEffect,

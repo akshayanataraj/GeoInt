@@ -128,11 +128,9 @@ export interface DesktopLayoutSettings {
    * its rail, or closed). Without it the panel reopened on every launch no
    * matter what the Settings toggle said (#1935).
    */
-  browserPanelVisible: boolean;
-  /** Same as {@link browserPanelVisible}, for the Comments right panel. */
+  /** Whether the Comments right panel is enabled in its dock rail. */
   commentsPanelVisible: boolean;
   layerPanelVisible: boolean;
-  showProjectInfo: boolean;
   stylePanelVisible: boolean;
   toolbarLabels: boolean;
 }
@@ -180,10 +178,8 @@ interface DesktopSettingsState {
 let desktopSettingsAreTemporary = false;
 
 export const DEFAULT_DESKTOP_LAYOUT_SETTINGS: DesktopLayoutSettings = {
-  browserPanelVisible: true,
   commentsPanelVisible: true,
   layerPanelVisible: true,
-  showProjectInfo: true,
   stylePanelVisible: true,
   toolbarLabels: true,
 };
@@ -447,10 +443,6 @@ function normalizeDesktopLayoutSettings(layout: unknown): DesktopLayoutSettings 
   // cannot smuggle non-boolean values into the layout settings.
   const candidate = layout as Partial<DesktopLayoutSettings>;
   return {
-    browserPanelVisible:
-      typeof candidate.browserPanelVisible === "boolean"
-        ? candidate.browserPanelVisible
-        : DEFAULT_DESKTOP_LAYOUT_SETTINGS.browserPanelVisible,
     commentsPanelVisible:
       typeof candidate.commentsPanelVisible === "boolean"
         ? candidate.commentsPanelVisible
@@ -459,10 +451,6 @@ function normalizeDesktopLayoutSettings(layout: unknown): DesktopLayoutSettings 
       typeof candidate.layerPanelVisible === "boolean"
         ? candidate.layerPanelVisible
         : DEFAULT_DESKTOP_LAYOUT_SETTINGS.layerPanelVisible,
-    showProjectInfo:
-      typeof candidate.showProjectInfo === "boolean"
-        ? candidate.showProjectInfo
-        : DEFAULT_DESKTOP_LAYOUT_SETTINGS.showProjectInfo,
     stylePanelVisible:
       typeof candidate.stylePanelVisible === "boolean"
         ? candidate.stylePanelVisible

@@ -17,10 +17,7 @@ import {
   NETCDF_IMAGE_SOURCE_KIND,
   DEFAULT_BASEMAP,
   effectiveLayerRenderState,
-  getPlanetaryBasemapById,
-  getPlanetaryBasemapByStyleUrl,
   isDuckDBQueryLayer,
-  PLANET_SWITCHER_OPTIONS,
   isStyleLibraryTargetLayer,
   canSaveLayerToLibrary,
   captureLayerLibraryEntry,
@@ -94,7 +91,6 @@ import {
   zoomToSelection,
 } from "../../lib/selection-actions";
 import { isMobile } from "../../lib/is-mobile";
-import { PLANET_SWITCHER_LABEL_KEYS } from "../../lib/planet-labels";
 import { masHidesDataSource } from "../../lib/mas-build";
 import {
   DATA_SOURCE_CATALOG,
@@ -671,26 +667,7 @@ export function LayerPanel({
   const basemapOpacity = useAppStore((s) => s.basemapOpacity);
   const setBasemapVisible = useAppStore((s) => s.setBasemapVisible);
   const setBasemapOpacity = useAppStore((s) => s.setBasemapOpacity);
-  const applyPlanetaryBasemap = useAppStore((s) => s.applyPlanetaryBasemap);
-  const restoreEarthBasemap = useAppStore((s) => s.restoreEarthBasemap);
   const basemapStyleUrl = useAppStore((s) => s.basemapStyleUrl);
-  // The body the switcher reflects, derived from the active *basemap* — not the
-  // ellipsoid, which Settings lets diverge from the basemap (e.g. Mars scale
-  // under an Earth style). Any planetary basemap resolves to its body: the
-  // Moon/Mars mosaics (from this switcher or the full picker) and Earth's own
-  // imagery. A normal Earth basemap (e.g. Liberty) resolves to nothing, so
-  // nothing is selected until a planetary basemap is applied.
-  const selectedPlanet = getPlanetaryBasemapByStyleUrl(basemapStyleUrl)?.ellipsoidId;
-  // The Earth basemap to fall back to when a planet is deselected — the last one
-  // active while no planet was selected (e.g. Liberty). Tracked in a ref so it
-  // survives the planet round-trip. Starts undefined (not seeded from the mount
-  // value, which could be a planetary basemap if the panel mounted while off
-  // Earth) and is only ever set to a genuine Earth basemap by the guard below,
-  // so a deselect never restores a planetary sentinel.
-  const previousEarthBasemap = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (!selectedPlanet) previousEarthBasemap.current = basemapStyleUrl;
-  }, [selectedPlanet, basemapStyleUrl]);
   const setLayerVisibility = useAppStore((s) => s.setLayerVisibility);
   const setLayerOpacity = useAppStore((s) => s.setLayerOpacity);
   const reorderLayer = useAppStore((s) => s.reorderLayer);
@@ -1164,20 +1141,6 @@ export function LayerPanel({
     // Open the new (empty) folder's name for editing right away.
     const group = useAppStore.getState().layerGroups.find((g) => g.id === id);
     if (group) beginGroupRename(group);
-  };
-
-  // Toggle a celestial body in the switcher (like Google Earth's planet
-  // dropdown). Selecting a body applies its basemap and syncs the ellipsoid;
-  // deselecting the active body returns to Earth and restores the basemap that
-  // was showing before (e.g. Liberty).
-  const togglePlanet = (body: EllipsoidId, selected: boolean) => {
-    if (!selected) {
-      restoreEarthBasemap(previousEarthBasemap.current ?? DEFAULT_BASEMAP);
-      return;
-    }
-    const option = PLANET_SWITCHER_OPTIONS.find((o) => o.ellipsoidId === body);
-    const basemap = option && getPlanetaryBasemapById(option.basemapId);
-    if (basemap) applyPlanetaryBasemap(basemap);
   };
 
   const beginRename = (layer: GeoLibreLayer) => {
@@ -2957,36 +2920,6 @@ export function LayerPanel({
       <div className="flex items-center justify-between border-b px-3 py-1.5">
         <span className="text-sm font-semibold">{t("sharedRail.layers")}</span>
         <div className="flex items-center gap-1">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                title={t("planetSwitcher.label")}
-                aria-label={t("planetSwitcher.label")}
-              >
-                <Orbit
-                  className={cn(
-                    "h-4 w-4",
-                    selectedPlanet && selectedPlanet !== "earth" && "text-primary",
-                  )}
-                />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuLabel>{t("planetSwitcher.label")}</DropdownMenuLabel>
-              {PLANET_SWITCHER_OPTIONS.map((option) => (
-                <DropdownMenuCheckboxItem
-                  key={option.ellipsoidId}
-                  checked={selectedPlanet === option.ellipsoidId}
-                  onCheckedChange={(checked) => togglePlanet(option.ellipsoidId, checked)}
-                >
-                  {t(PLANET_SWITCHER_LABEL_KEYS[option.ellipsoidId])}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
           <Button
             variant="ghost"
             size="icon"

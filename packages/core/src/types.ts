@@ -62,29 +62,68 @@ export const BLANK_BASEMAP = "";
 export const PROJECT_VERSION = "0.2.0";
 
 /**
- * The app's single-screen mode switcher (see UI_REPURPOSE_PLAN.md §2): one
- * persistent shell, no router, no distinct pages per section. `"map"` is the
- * existing GeoLibre map/layers/panels experience, unchanged, and is where S2
- * Grid and (later) satellite/flight-tracking layers live. Every other value
- * is a placeholder screen for now (see `ModeScreen.tsx`) -- their real
- * content (News/Social RAG chat, monitoring dashboards, admin CRUD,
- * reports/digest forms) is future work per the plan's delivery phases.
- * Feedback is deliberately not a mode: the feature spec requires it reachable
- * from every module, so it is a persistent floating action instead.
+ * Workspace state for the single-screen intelligence console
+ * (UI_REPURPOSE_PLAN.md §2).
+ *
+ * There is deliberately no "active mode" union here any more. The earlier
+ * design had an `AppMode` that swapped the whole screen between a map page and
+ * one placeholder page per feature area -- a router in everything but name:
+ * only one area could be on screen at a time, and the live map had to be hidden
+ * to show any other one. This product is a monitoring console, so the map is
+ * the permanent substrate and every other surface is a panel *beside* or *over*
+ * it, toggled independently. Two kinds:
+ *
+ * - {@link IntelDockPanel} -- docks to the left or right of the map and
+ *   reserves real layout width. The map narrows but stays live and interactive,
+ *   which is the entire point: S2 cell metrics, the event feed, and the analyst
+ *   chat are read *while* looking at the map, not instead of it. The left dock
+ *   stacks S2 above the event feed; chat takes the right so both can be open at
+ *   once without either being cramped.
+ * - {@link IntelConsoleSheet} -- a large overlay for the non-spatial admin
+ *   surfaces (platform health, reports, digest settings, accounts). These have
+ *   nothing to put on a map, so they take the screen; the map stays mounted
+ *   behind them and comes back untouched on close.
+ *
+ * Both are independent toggles, so any combination is a valid layout.
  */
-export const APP_MODES = [
-  "map",
-  "news",
-  "social",
-  "monitoring",
-  "reports",
-  "digest",
-  "admin",
-] as const;
+export const INTEL_DOCK_PANELS = ["s2", "events", "chat"] as const;
 
-export type AppMode = (typeof APP_MODES)[number];
+export type IntelDockPanel = (typeof INTEL_DOCK_PANELS)[number];
 
-export const DEFAULT_APP_MODE: AppMode = "map";
+export const INTEL_CONSOLE_SHEETS = ["monitoring", "reports", "digest", "admin"] as const;
+
+export type IntelConsoleSheet = (typeof INTEL_CONSOLE_SHEETS)[number];
+
+/** Which side of the map each dock panel occupies. */
+export const INTEL_DOCK_SIDE: Readonly<Record<IntelDockPanel, "left" | "right">> = {
+  s2: "left",
+  events: "left",
+  chat: "right",
+};
+
+export interface IntelWorkspaceState {
+  /**
+   * Open dock panels, as an explicit id list rather than a bag of booleans, so
+   * a dock renders its panels in a stable, meaningful order (S2 above the event
+   * feed) regardless of the order the user happened to open them in.
+   */
+  openPanels: readonly IntelDockPanel[];
+  /** The overlay sheet on screen, or null. Only one is open at a time. */
+  sheet: IntelConsoleSheet | null;
+  /** Whether the temporal scrubber occupies its strip beneath the map. */
+  timelineOpen: boolean;
+}
+
+/**
+ * Opening layout: a live map with both left-hand intelligence panels up (an
+ * empty console would hide the product on first launch) and the chat closed,
+ * since starting a conversation is a deliberate act.
+ */
+export const DEFAULT_INTEL_WORKSPACE: IntelWorkspaceState = {
+  openPanels: ["s2", "events"],
+  sheet: null,
+  timelineOpen: true,
+};
 
 /**
  * Every layer type, as a runtime list so untrusted input (an imported Layer
@@ -1366,7 +1405,8 @@ export interface MapPreferences {
   /**
    * Celestial body / ellipsoid the project's coordinates describe (keys into the
    * ellipsoid registry in `@geolibre/core`). Drives measurement radii and pairs
-   * with planetary basemaps. Defaults to `"earth"` (WGS 84).
+   * Always `"earth"` (WGS 84) in this product; see `ellipsoids.ts`. Kept in the
+   * project format so a project saved by the upstream build still loads.
    */
   ellipsoidId: string;
   /**

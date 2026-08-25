@@ -157,12 +157,13 @@ describe("trajectory speed", () => {
   });
 });
 
-describe("the active celestial body", () => {
+describe("the active ellipsoid", () => {
   // These tools convert their distance threshold into turf's Earth-based units
   // once, outside the O(n²) scans, rather than converting every measured
-  // distance (issue #1128). Pin that the hoisted comparison is still the body's
-  // ground distance, not Earth's.
-  it("scales the trajectory speed by the body's radius ratio", () => {
+  // distance (GeoLibre#1128). Earth is the only ellipsoid this product ships, so
+  // these used to assert Mars' 0.532 radius ratio and now assert the opposite:
+  // a body id left in an old project must not scale anything.
+  it("does not scale the trajectory speed for a removed body id", () => {
     const track = pointLayer("track", [
       [0, 0, { t: 0 }],
       [0, 0.01, { t: 3600 }],
@@ -180,14 +181,12 @@ describe("the active celestial body", () => {
         setActiveEllipsoidId("earth");
       }
     };
-    // Mars' mean radius is ~0.532x Earth's, so the same fixes an hour apart
-    // cover about half the ground.
-    assert.ok(Math.abs(speedOn("mars") / speedOn("earth") - 0.532) < 0.002);
+    assert.equal(speedOn("mars"), speedOn("earth"));
   });
 
-  it("holds the stop-detection threshold in the body's ground distance", () => {
-    // ~1.1 km apart on Earth, which is ~590 m of Martian ground. A 800 m
-    // threshold therefore separates them on Earth but merges them on Mars.
+  it("holds the stop-detection threshold on Earth's radius for a removed body id", () => {
+    // ~1.1 km apart on Earth. An 800 m threshold separates them, and a stale
+    // body id must not shrink the measured gap enough to merge them.
     const track = pointLayer("track", [
       [0, 0, { t: 0 }],
       [0, 0.01, { t: 600 }],
@@ -209,7 +208,7 @@ describe("the active celestial body", () => {
       }
     };
     assert.equal(stopsWith("earth"), 0);
-    assert.equal(stopsWith("mars"), 1);
+    assert.equal(stopsWith("mars"), 0);
   });
 });
 

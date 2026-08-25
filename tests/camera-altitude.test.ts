@@ -1,10 +1,14 @@
 /**
  * Tests for the status bar's camera altitude readout (issue #1816).
  *
- * Two things are easy to get wrong and both are covered here: MapLibre reports
- * altitude against Earth's radius even on a planetary basemap, and the readout
- * has to switch denomination across the ~7 orders of magnitude between standing
- * on a ridge and viewing the whole globe.
+ * `scaleAltitudeToActiveBody` existed because MapLibre reports altitude against
+ * Earth's radius even on a planetary basemap. Earth is the only body this
+ * product ships, so the scaling is now identity and what is worth testing is
+ * that it stays identity and still rejects the values MapLibre cannot produce.
+ *
+ * The formatting half is unaffected: the readout still has to switch
+ * denomination across the ~7 orders of magnitude between standing on a ridge and
+ * viewing the whole globe.
  */
 
 import assert from "node:assert/strict";
@@ -23,21 +27,14 @@ describe("scaleAltitudeToActiveBody", () => {
     assert.equal(scaleAltitudeToActiveBody(4200), 4200);
   });
 
-  it("scales down on the Moon, whose radius is ~3.7x smaller", () => {
-    setActiveEllipsoidId("moon");
-    const scaled = scaleAltitudeToActiveBody(10000);
-    assert.ok(scaled !== null);
-    // Moon mean radius 1_737_400 m / Earth mean radius ~6_371_009 m ≈ 0.2727.
-    assert.ok(
-      Math.abs(scaled - 10000 * 0.2727) < 20,
-      `expected ~2727 m on the Moon, got ${scaled}`,
-    );
-  });
-
-  it("scales on Mars", () => {
-    setActiveEllipsoidId("mars");
-    const scaled = scaleAltitudeToActiveBody(10000);
-    assert.ok(scaled !== null && scaled > 5200 && scaled < 5400, `got ${scaled}`);
+  it("stays identity for a body id the old build supported", () => {
+    // A project saved before the non-Earth bodies were removed can still set
+    // one. It resolves to Earth, so the altitude must come back untouched
+    // rather than scaled by a stale radius.
+    for (const removed of ["moon", "mars"]) {
+      setActiveEllipsoidId(removed);
+      assert.equal(scaleAltitudeToActiveBody(10000), 10000, `${removed} should not scale`);
+    }
   });
 
   it("returns null for a value MapLibre could not produce", () => {

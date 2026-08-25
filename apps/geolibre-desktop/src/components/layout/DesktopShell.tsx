@@ -65,7 +65,6 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
-import { BROWSER_PANEL_ID, useRegisterBrowserPanel } from "../../hooks/useRegisterBrowserPanel";
 import { COMMENTS_PANEL_ID, useRegisterCommentsPanel } from "../../hooks/useRegisterCommentsPanel";
 import { CommentsPanel } from "../comments/CommentsPanel";
 import { CommentMapOverlay } from "../comments/CommentMapOverlay";
@@ -92,7 +91,6 @@ import {
   type DroppedRaster,
 } from "../../lib/tauri-io";
 import { buildKmlModelLayer } from "../../lib/kml-model-layer";
-import { PLANET_SWITCHER_LABEL_KEYS } from "../../lib/planet-labels";
 import { isPhotoDropFileName, type GeotaggedPhotoResult } from "../../lib/geotagged-photos";
 import type { LargeVectorDataset } from "../../lib/duckdb-vector-guard";
 import { detectNonGeographicCoordinates } from "@geolibre/core";
@@ -147,7 +145,6 @@ import { NetcdfProfileWindow } from "./NetcdfProfileWindow";
 import { hasElevationConsent } from "../../lib/elevation-consent";
 import { MapLegendPanel } from "../legend/MapLegendPanel";
 import { RasterSubsetPanel } from "./RasterSubsetPanel";
-import { BasemapExtractPanel } from "./BasemapExtractPanel";
 import { TerrainSettingsDialog } from "./TerrainSettingsDialog";
 import { MapContextMenu } from "./MapContextMenu";
 import { KnowledgeCardPanel, type KnowledgePlace } from "./KnowledgeCardPanel";
@@ -160,7 +157,6 @@ import { appendDiagnostic, useDiagnosticsSnapshot } from "../../lib/diagnostics"
 import { SectionErrorBoundary, SilentErrorBoundary } from "../common/error-boundaries";
 import { AttributeTable } from "../panels/AttributeTable";
 import { RasterAttributeTable } from "../panels/RasterAttributeTable";
-import { BrowserPanel } from "../panels/BrowserPanel";
 import { LayerPanel } from "../panels/LayerPanel";
 import { ViewerLayerPanel } from "../panels/ViewerLayerPanel";
 import { FloatingPanels } from "../panels/FloatingPanels";
@@ -180,7 +176,6 @@ import { StoryMapPresenter } from "../storymap/StoryMapPresenter";
 import { DiagnosticsDialog } from "./DiagnosticsDialog";
 import { FileNamePromptDialog } from "./FileNamePromptDialog";
 import { ProjectPluginTrustDialog } from "./ProjectPluginTrustDialog";
-import { ProjectHistoryDialog } from "./ProjectHistoryDialog";
 import { ProjectRecoveryDialog } from "./ProjectRecoveryDialog";
 import { StatusBar } from "./StatusBar";
 import { TopToolbar } from "./TopToolbar";
@@ -440,20 +435,6 @@ const SqlWorkspacePanel = lazy(() =>
     }),
 );
 
-const AssistantPanel = lazy(() =>
-  import("../panels/AssistantPanel")
-    .then((module) => ({
-      default: module.AssistantPanel,
-    }))
-    .catch((error) => {
-      // Same chunk-load fallback rationale as the dialogs above.
-      console.error("Failed to load AssistantPanel", error);
-      const Fallback = (() =>
-        null) as unknown as typeof import("../panels/AssistantPanel").AssistantPanel;
-      return { default: Fallback };
-    }),
-);
-
 const DashboardPanel = lazy(() =>
   import("../panels/DashboardPanel")
     .then((module) => ({
@@ -572,13 +553,12 @@ export function DesktopShell({
       finalHeading: t("terrainMeasure.finalHeading"),
       bodyNote: t("terrainMeasure.bodyNote"),
     });
-    // The note names the body, so it uses the planet switcher's names rather
-    // than the ellipsoid records' datum-qualified ones.
-    setTerrainMeasureBodyNames(
-      Object.fromEntries(
-        Object.entries(PLANET_SWITCHER_LABEL_KEYS).map(([id, key]) => [id, t(key)]),
-      ),
-    );
+    // Earth is the only body now, so this is a single entry rather than a map
+    // built from the (removed) planet switcher's label keys. Still supplied
+    // rather than dropped: the plugin falls back to the ellipsoid record's
+    // datum-qualified name ("Earth (WGS 84)"), which reads badly in a
+    // measurement note.
+    setTerrainMeasureBodyNames({ earth: t("planetSwitcher.earth") });
   }, [t]);
   // The map's Fullscreen control maximizes the map *canvas* (it calls
   // requestFullscreen on the map container). Chromium promotes that element to
@@ -636,7 +616,6 @@ export function DesktopShell({
   }, [dataUrlLoadState?.fitLayerIds, dataUrlLoadState?.status]);
 
   const projectHistory = useProjectHistory(mapControllerRef);
-  const [projectHistoryOpen, setProjectHistoryOpen] = useState(false);
   // The place shown in the Wikipedia knowledge card, or null when it is closed.
   // `pendingKnowledgePlace` holds the target while the one-time consent notice
   // is open, so it can be applied only after the user acknowledges it.
@@ -685,7 +664,6 @@ export function DesktopShell({
   // The Offline Basemap Extract panel is a non-modal floating panel over the
   // map (so the map stays interactive for drawing a bbox), mounted here beside
   // the Raster Subset panel and opened from the Add Data menu in the toolbar.
-  const [basemapExtractOpen, setBasemapExtractOpen] = useState(false);
   const dragDepthRef = useRef(0);
   const dropMessageTimeoutRef = useRef<number | null>(null);
   const materializingRef = useRef(false);
@@ -705,7 +683,6 @@ export function DesktopShell({
   const setSqlWorkspaceOpen = useAppStore((s) => s.setSqlWorkspaceOpen);
   // Register the Browser as a movable/dockable right panel; its body is portaled
   // into a dedicated content host (below) that the dock slots adopt.
-  useRegisterBrowserPanel();
   useRegisterCommentsPanel();
   // One shared project-file-actions instance for both the toolbar and the
   // Browser panel, so their "open recent" calls coordinate their aborts (two
@@ -729,14 +706,6 @@ export function DesktopShell({
   // moving the panel between docks relocates the same DOM and preserves the
   // plugin's state. `contents` keeps it transparent to layout.
   const [pluginContentEl] = useState(() => {
-    const el = document.createElement("div");
-    el.className = "contents";
-    return el;
-  });
-  // A second, dedicated host for the Browser panel's React portal (below). Kept
-  // separate from pluginContentEl so the imperative plugin-render effect's
-  // `replaceChildren` can never wipe the portal-managed DOM, and vice versa.
-  const [browserContentEl] = useState(() => {
     const el = document.createElement("div");
     el.className = "contents";
     return el;
@@ -792,11 +761,7 @@ export function DesktopShell({
   // The dock slots adopt whichever host owns the active panel's content: the
   // Browser's dedicated portal host, the Comments dedicated portal host, or the shared imperative plugin host.
   const dockContentEl =
-    activePanelId === BROWSER_PANEL_ID
-      ? browserContentEl
-      : activePanelId === COMMENTS_PANEL_ID
-        ? commentsContentEl
-        : pluginContentEl;
+    activePanelId === COMMENTS_PANEL_ID ? commentsContentEl : pluginContentEl;
   // Render the active panel into the shared host once; re-run when its
   // registration is replaced (re-registration refresh) but not on dock/collapse
   // changes. Keyed on the render function identity so that a plugin
@@ -837,7 +802,6 @@ export function DesktopShell({
     setPluginPanelWidth(clampPluginPanelWidth(panel.defaultWidth ?? PLUGIN_PANEL_DEFAULT_WIDTH));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePanelId]);
-  const assistantOpen = useAppStore((s) => s.ui.assistantOpen);
   const dashboardOpen = useAppStore((s) => s.ui.dashboardOpen);
   const geometryEditLayerId = useSyncExternalStore(
     subscribeGeometryEdit,
@@ -898,6 +862,10 @@ export function DesktopShell({
   useNetcdfIdentify(mapControllerRef, mapReadyGeneration);
   useCogSpectralIdentify(mapControllerRef, mapReadyGeneration);
   const [layerPanelWidth, setLayerPanelWidth] = useState(initialSidePanelWidth);
+  // Layers is an overlay opened from the top bar rather than a sidebar. Closed
+  // on load: the console's own panels are what should be up on arrival, and
+  // layer management is an occasional task.
+  const [layersOverlayOpen, setLayersOverlayOpen] = useState(false);
   const [stylePanelWidth, setStylePanelWidth] = useState(initialSidePanelWidth);
   const [stylePanelOpenRequest, setStylePanelOpenRequest] = useState(0);
   const openStylePanel = useCallback(() => {
@@ -2153,43 +2121,23 @@ export function DesktopShell({
             mapControllerRef={mapControllerRef}
             mapReadyGeneration={mapReadyGeneration}
             showLabels={layoutOptions.toolbarLabels}
-            showProjectInfo={layoutOptions.showProjectInfo}
             themeMode={themeMode}
-            collaboration={collaboration}
             projectFiles={projectFiles}
             onOpenDiagnostics={() => setDiagnosticsOpen(true)}
-            onOpenProjectHistory={() => {
-              projectHistory.clearRestoreError();
-              void projectHistory.refresh();
-              setProjectHistoryOpen(true);
-            }}
             onToggleThemeMode={onToggleThemeMode}
-            onOpenBasemapExtract={() => setBasemapExtractOpen(true)}
             onAddComment={commentTool.toggleTool}
+            onToggleLayers={() => setLayersOverlayOpen((open) => !open)}
+            layersOpen={layersOverlayOpen}
             viewer={layoutOptions.viewer}
           />
         </SectionErrorBoundary>
       ) : null}
       <div data-workspace-row="" className="relative flex min-h-0 flex-1 flex-col md:flex-row">
-        {/* The Browser panel body is portaled into its dedicated content host
-            (which the dock slots relocate between positions), so it shares the
-            app's React context and the shell owns its dock chrome. */}
-        {activePanelId === BROWSER_PANEL_ID && !layoutOptions.panelsHidden && !layoutOptions.viewer
-          ? createPortal(
-              <BrowserPanel
-                mapControllerRef={mapControllerRef}
-                onOpenRecentProject={projectFiles.handleOpenRecent}
-                onAddFilePath={addFilePath}
-              />,
-              browserContentEl,
-            )
-          : null}
         {activePanelId === COMMENTS_PANEL_ID && !layoutOptions.panelsHidden
           ? createPortal(
               <CommentsPanel
                 mapControllerRef={mapControllerRef}
-                collaboration={collaboration}
-                onActivateCommentTool={commentTool.toggleTool}
+                    onActivateCommentTool={commentTool.toggleTool}
                 isCommentToolActive={commentTool.isActive}
                 onShowResolvedChange={setShowResolvedComments}
                 selectedCommentId={selectedCommentId}
@@ -2221,87 +2169,12 @@ export function DesktopShell({
                 />
               </SectionErrorBoundary>
             ) : null}
-            {replaceLayersPanelId && !layoutOptions.viewer ? (
-              // Shared-rail mode on the Layers (left) side: the plugin panel shares
-              // the Layers sidebar surface, so a single rail lists both the workbench
-              // and Layers instead of the built-in panel standing on its own.
-              <SectionErrorBoundary
-                label="Shared left sidebar"
-                displayName={t("shell.section.sharedLeftSidebar")}
-              >
-                <SharedSidebar
-                  key={replaceLayersPanelId}
-                  side="layers"
-                  pluginId={replaceLayersPanelId}
-                  additionalPanelIds={replaceLayersPanelIds}
-                  pluginContentEl={dockContentEl}
-                  pluginWidth={pluginPanelWidth}
-                  onPluginWidthChange={setPluginPanelWidth}
-                  builtinVisible={layoutOptions.layerPanelVisible}
-                  builtinTitle={t("sharedRail.layers")}
-                  builtinIcon={<Layers className="h-4 w-4" />}
-                  // The Browser docks here on by default but must not bury Layers:
-                  // start with Layers expanded and Browser a collapsed rail entry.
-                  // On a phone-width viewport both start collapsed (panels overlay
-                  // there), matching the mobile "panels default collapsed" behavior.
-                  initialBuiltinExpanded={
-                    replaceLayersPanelId === BROWSER_PANEL_ID &&
-                    !getIsMobileViewport() &&
-                    !layoutOptions.panelsCollapsed
-                  }
-                  // The story-map presentation is the only standalone Layers
-                  // autoCollapse trigger (the notebook collapses Style, not Layers).
-                  forceBuiltinCollapsed={storymapPresenting}
-                  renderBuiltin={({ collapsed, onCollapsedChange }) => (
-                    <LayerPanel
-                      mapControllerRef={mapControllerRef}
-                      collaborationApi={collaboration}
-                      onResizeStart={startLayerPanelResize}
-                      geometryEditLayerId={geometryEditLayerId}
-                      onToggleGeometryEdit={handleToggleGeometryEdit}
-                      onCancelGeometryEdit={handleCancelGeometryEdit}
-                      onMaterializeDuckDBLayer={handleMaterializeDuckDBLayer}
-                      onOpenRasterStylePanel={() =>
-                        openRasterLayerPanel(createAppAPI(mapControllerRef))
-                      }
-                      onOpenStylePanel={
-                        layoutOptions.stylePanelVisible ? openStylePanel : undefined
-                      }
-                      onOpenRasterSubset={setRasterSubsetLayer}
-                      collapsed={collapsed}
-                      onCollapsedChange={onCollapsedChange}
-                      hideOwnRail
-                    />
-                  )}
-                />
-              </SectionErrorBoundary>
-            ) : layoutOptions.layerPanelVisible ? (
-              <SectionErrorBoundary label="Layer panel" displayName={t("shell.section.layerPanel")}>
-                {layoutOptions.viewer ? (
-                  <ViewerLayerPanel />
-                ) : (
-                  <LayerPanel
-                    mapControllerRef={mapControllerRef}
-                    collaborationApi={collaboration}
-                    onResizeStart={startLayerPanelResize}
-                    geometryEditLayerId={geometryEditLayerId}
-                    onToggleGeometryEdit={handleToggleGeometryEdit}
-                    onCancelGeometryEdit={handleCancelGeometryEdit}
-                    onMaterializeDuckDBLayer={handleMaterializeDuckDBLayer}
-                    onOpenRasterStylePanel={() =>
-                      openRasterLayerPanel(createAppAPI(mapControllerRef))
-                    }
-                    onOpenStylePanel={layoutOptions.stylePanelVisible ? openStylePanel : undefined}
-                    onOpenRasterSubset={setRasterSubsetLayer}
-                    autoCollapse={
-                      storymapPresenting ||
-                      layoutOptions.panelsCollapsed ||
-                      autoCollapsedPanel === "layers"
-                    }
-                  />
-                )}
-              </SectionErrorBoundary>
-            ) : null}
+            {/* The Layers sidebar was removed from this column: the left dock is
+                the intelligence column now, and Layers opens as an overlay from
+                the top bar instead (see `layersOverlayOpen` below). The plugin
+                shared-rail mode that used to live here went with it -- with no
+                built-in Layers panel to share a rail with, `replace-layers`
+                panels fall back to their positional docks. */}
             {!layoutOptions.viewer ? (
               <SectionErrorBoundary
                 label="Plugin panel (right of Layers)"
@@ -2329,6 +2202,42 @@ export function DesktopShell({
               chrome-free visual layout. Placed inside the main landmark so it
               is not flagged as content outside a landmark. */}
           <h1 className="sr-only">{t("shell.workspaceTitle")}</h1>
+          {/* Layers, as a floating overlay over the top-left of the map rather
+              than a sidebar column. Non-modal on purpose: adding and restyling
+              layers is work done while watching the map react, so the map stays
+              interactive underneath and the overlay is dismissed from the same
+              top-bar button that opened it.
+
+              `collapsed={false}` and `hideOwnRail` make LayerPanel render as
+              plain content -- its collapse rail belonged to the sidebar layout
+              it no longer lives in. */}
+          {layersOverlayOpen && !layoutOptions.viewer ? (
+            <SectionErrorBoundary label="Layer panel" displayName={t("shell.section.layerPanel")}>
+              <div className="geoint-fade-in absolute start-3 top-3 z-20 flex max-h-[calc(100%-1.5rem)] w-[320px] flex-col overflow-hidden rounded-lg border bg-card shadow-lg motion-reduce:animate-none">
+                <LayerPanel
+                  mapControllerRef={mapControllerRef}
+                  collaborationApi={collaboration}
+                  geometryEditLayerId={geometryEditLayerId}
+                  onToggleGeometryEdit={handleToggleGeometryEdit}
+                  onCancelGeometryEdit={handleCancelGeometryEdit}
+                  onMaterializeDuckDBLayer={handleMaterializeDuckDBLayer}
+                  onOpenRasterStylePanel={() =>
+                    openRasterLayerPanel(createAppAPI(mapControllerRef))
+                  }
+                  onOpenStylePanel={layoutOptions.stylePanelVisible ? openStylePanel : undefined}
+                  onOpenRasterSubset={setRasterSubsetLayer}
+                  // The overlay is a fixed width, so its drag-to-resize handle
+                  // has nothing to drive. Required prop, so it is an explicit
+                  // no-op rather than wiring the sidebar's resize logic to a
+                  // panel that is no longer in the sidebar.
+                  onResizeStart={() => {}}
+                  collapsed={false}
+                  onCollapsedChange={() => setLayersOverlayOpen(false)}
+                  hideOwnRail
+                />
+              </div>
+            </SectionErrorBoundary>
+          ) : null}
           <SectionErrorBoundary
             label="Map"
             displayName={t("shell.section.map")}
@@ -2391,11 +2300,6 @@ export function DesktopShell({
               <RasterSubsetPanel
                 layer={rasterSubsetLayer}
                 onClose={() => setRasterSubsetLayer(null)}
-                mapControllerRef={mapControllerRef}
-              />
-              <BasemapExtractPanel
-                open={basemapExtractOpen}
-                onClose={() => setBasemapExtractOpen(false)}
                 mapControllerRef={mapControllerRef}
               />
               <Suspense fallback={null}>
@@ -2618,13 +2522,6 @@ export function DesktopShell({
           </Suspense>
         </SectionErrorBoundary>
       ) : null}
-      {assistantOpen ? (
-        <SectionErrorBoundary label="Assistant" displayName={t("shell.section.assistant")}>
-          <Suspense fallback={null}>
-            <AssistantPanel mapControllerRef={mapControllerRef} />
-          </Suspense>
-        </SectionErrorBoundary>
-      ) : null}
       {layoutOptions.statusBarVisible ? (
         <SectionErrorBoundary label="Status bar" displayName={t("shell.section.statusBar")}>
           <StatusBar
@@ -2639,16 +2536,6 @@ export function DesktopShell({
         diagnostics={diagnostics}
         open={diagnosticsOpen}
         onOpenChange={setDiagnosticsOpen}
-      />
-      <ProjectHistoryDialog
-        open={projectHistoryOpen}
-        onOpenChange={(open) => {
-          setProjectHistoryOpen(open);
-          if (!open) projectHistory.clearRestoreError();
-        }}
-        snapshots={projectHistory.snapshots}
-        restoreError={projectHistory.restoreError}
-        onRestore={projectHistory.restore}
       />
       <ProjectRecoveryDialog
         snapshot={projectHistory.recoverySnapshot}

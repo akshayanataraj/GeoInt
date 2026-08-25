@@ -16,7 +16,6 @@ export interface LayoutOptions {
   panelsHidden: boolean;
   /** Start the Layers and Style panels on their rails without hiding them. */
   panelsCollapsed: boolean;
-  showProjectInfo: boolean;
   statusBarVisible: boolean;
   stylePanelVisible: boolean;
   toolbarLabels: boolean;
@@ -63,9 +62,9 @@ export function layoutOptionsFromLocation(layoutSettings: DesktopLayoutSettings)
     params.has("maponly") && MAP_ONLY_VALUES.has(normalizedParam(params.get("maponly")));
   const viewer = layout === "viewer";
   // `maponly` implies `compact` so the map fills its container (the `<main>`
-  // element gets `min-h-0`). This also forces `toolbarLabels` and
-  // `showProjectInfo` to false below, which is harmless since the toolbar is
-  // hidden, but any other consumer of `compact` sees `true` in map-only mode.
+  // element gets `min-h-0`). This also forces `toolbarLabels` to false below,
+  // which is harmless since the toolbar is hidden, but any other consumer of
+  // `compact` sees `true` in map-only mode.
   const compact = mapOnly || viewer || COMPACT_LAYOUT_VALUES.has(layout);
   const panelsHidden =
     mapOnly ||
@@ -74,7 +73,6 @@ export function layoutOptionsFromLocation(layoutSettings: DesktopLayoutSettings)
   const panelsCollapsed = !panelsHidden && panels === "collapsed";
   const toolbarLabels =
     !compact && !ICON_TOOLBAR_VALUES.has(toolbar) ? layoutSettings.toolbarLabels : false;
-  const showProjectInfo = compact ? false : layoutSettings.showProjectInfo;
   const layerPanelVisible = panelsHidden ? false : viewer ? true : layoutSettings.layerPanelVisible;
   const stylePanelVisible = panelsHidden || viewer ? false : layoutSettings.stylePanelVisible;
   // The attribute table is hidden by default and opened on demand from a
@@ -88,7 +86,6 @@ export function layoutOptionsFromLocation(layoutSettings: DesktopLayoutSettings)
     layerPanelVisible,
     panelsHidden,
     panelsCollapsed,
-    showProjectInfo,
     statusBarVisible: !mapOnly,
     stylePanelVisible,
     toolbarLabels,

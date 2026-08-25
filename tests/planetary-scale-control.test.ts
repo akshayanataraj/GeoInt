@@ -8,8 +8,13 @@ import {
 import { getEllipsoid, meanRadiusMeters } from "../packages/core/src/ellipsoids";
 
 const EARTH_R = meanRadiusMeters(getEllipsoid("earth"));
-const MOON_R = meanRadiusMeters(getEllipsoid("moon"));
-const MARS_R = meanRadiusMeters(getEllipsoid("mars"));
+// `greatCircleMeters` takes the radius as a parameter, so the linear-scaling
+// property below is tested with arbitrary radii rather than with real bodies.
+// It used to use the Moon's and Mars', but Earth is the only ellipsoid this
+// product ships (see `ellipsoids.ts`), and looking up a removed body would
+// silently return Earth's radius and make the assertion vacuous.
+const SMALL_R = EARTH_R * 0.2725;
+const MID_R = EARTH_R * 0.5320;
 
 describe("greatCircleMeters", () => {
   it("measures one equatorial degree as ~1/360 of the circumference", () => {
@@ -18,18 +23,18 @@ describe("greatCircleMeters", () => {
     assert.ok(Math.abs(d - expected) < 1e-3, `${d} vs ${expected}`);
   });
 
-  it("scales linearly with the body radius (the whole point of the fix)", () => {
+  it("scales linearly with the supplied radius", () => {
     const a = { lng: 10, lat: 20 };
     const b = { lng: 12, lat: 24 };
     const earth = greatCircleMeters(a, b, EARTH_R);
-    const moon = greatCircleMeters(a, b, MOON_R);
-    const mars = greatCircleMeters(a, b, MARS_R);
+    const small = greatCircleMeters(a, b, SMALL_R);
+    const mid = greatCircleMeters(a, b, MID_R);
     // Same pixels → same angular span → distance is just radius × angle, so the
     // ratio of distances is exactly the ratio of radii.
-    assert.ok(Math.abs(moon / earth - MOON_R / EARTH_R) < 1e-9);
-    assert.ok(Math.abs(mars / earth - MARS_R / EARTH_R) < 1e-9);
-    // Sanity: the Moon reads much shorter than Earth for the same span.
-    assert.ok(moon < earth * 0.3);
+    assert.ok(Math.abs(small / earth - SMALL_R / EARTH_R) < 1e-9);
+    assert.ok(Math.abs(mid / earth - MID_R / EARTH_R) < 1e-9);
+    // Sanity: a much smaller radius reads much shorter for the same span.
+    assert.ok(small < earth * 0.3);
   });
 
   it("is zero for coincident points", () => {

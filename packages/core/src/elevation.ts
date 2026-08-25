@@ -19,8 +19,10 @@
  * cannot import from `@geolibre/plugins` without a dependency cycle — plugins
  * already depends on map. Core is the only package all three can share.
  *
- * Source 2 is Earth-only: Open-Meteo has no data for the planetary basemaps, so
- * callers must not reach for it when the active body is not Earth.
+ * Source 2 is Earth-only. That mattered upstream, which supported non-Earth
+ * bodies Open-Meteo has no data for; this product is Earth-only, so the
+ * caller-supplied `isEarth` guard below is always true and kept only because it
+ * is an injected parameter, not a branch this module owns.
  */
 
 /** A coordinate as `[longitude, latitude]` in degrees. */
@@ -324,8 +326,7 @@ export function createPointerElevationResolver(
           cache.set(key, value);
         }
         // The pointer moved, left, or the resolver was disposed while the
-        // request was in flight. Also recheck the body: a switch to a planetary
-        // basemap mid-request must not publish an Earth elevation over it.
+        // request was in flight.
         if (requested !== generation || !isEarth() || !isEnabled() || !canUseRemote()) return;
         emit(value);
       })();

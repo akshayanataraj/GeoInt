@@ -1338,8 +1338,8 @@ export const MapCanvas = memo(function MapCanvas({
       onControllerReadyRef.current?.();
     });
     controller.current?.setStyle(basemapStyleUrl);
-    // Switching the active body without moving the camera -- the planet switcher
-    // or a different planetary basemap -- changes the radius the altitude is
+    // Upstream, switching the active body without moving the camera -- via the
+    // planet switcher or another planetary basemap -- changed the radius the altitude is
     // scaled by, but fires no moveend, so the readout would keep the previous
     // body's number until the next pan. Mirrors how setStyle refreshes the
     // scale bar for the same reason.

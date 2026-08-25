@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  PLANETARY_BASEMAP_SENTINEL_PREFIX,
-  PLANETARY_BASEMAPS,
 } from "../packages/core/src/ellipsoids";
 import {
   getRegionalBasemapById,
@@ -46,20 +44,17 @@ describe("regional basemap catalog invariants", () => {
     }
   });
 
-  // A regional basemap must never collide with the planetary sentinel: the
-  // planetary path also switches the project's celestial body, which would
-  // reproject measurements onto the wrong radius for an Earth basemap.
-  it("uses a sentinel prefix distinct from the planetary one", () => {
-    assert.notEqual(REGIONAL_BASEMAP_SENTINEL_PREFIX, PLANETARY_BASEMAP_SENTINEL_PREFIX);
+  // Upstream also had a `geolibre://basemap/` sentinel for planetary basemaps,
+  // and this test guarded against a regional basemap colliding with it. Those
+  // basemaps are gone, but a project saved by that build can still carry one, so
+  // pin that the regional prefix stays distinct from it -- a collision would
+  // have `resolveMapStyle` treat a stale planetary sentinel as a regional
+  // basemap instead of falling back to the default.
+  it("uses a sentinel prefix distinct from the retired planetary one", () => {
+    const RETIRED_PLANETARY_PREFIX = "geolibre://basemap/";
+    assert.notEqual(REGIONAL_BASEMAP_SENTINEL_PREFIX, RETIRED_PLANETARY_PREFIX);
     for (const basemap of REGIONAL_BASEMAPS) {
-      assert.ok(!basemap.styleUrl.startsWith(PLANETARY_BASEMAP_SENTINEL_PREFIX));
-    }
-    const planetaryIds = new Set(PLANETARY_BASEMAPS.map((basemap) => basemap.id));
-    for (const basemap of REGIONAL_BASEMAPS) {
-      assert.ok(
-        !planetaryIds.has(basemap.id),
-        `${basemap.id} collides with a planetary basemap id`,
-      );
+      assert.ok(!basemap.styleUrl.startsWith(RETIRED_PLANETARY_PREFIX));
     }
   });
 

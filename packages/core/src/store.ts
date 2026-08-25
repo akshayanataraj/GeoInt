@@ -29,8 +29,11 @@ import {
   reorderLayerGroupInPanel,
 } from "./layer-groups";
 import {
-  type AppMode,
-  DEFAULT_APP_MODE,
+  type IntelConsoleSheet,
+  type IntelDockPanel,
+  INTEL_DOCK_PANELS,
+  type IntelWorkspaceState,
+  DEFAULT_INTEL_WORKSPACE,
   DEFAULT_BASEMAP,
   DEFAULT_DASHBOARD_COLUMNS,
   DEFAULT_LAYER_STYLE,
@@ -91,12 +94,7 @@ import {
 } from "./layer-style-clipboard";
 import { applyJoinsToLayer, cascadeLayerJoinRefresh, reapplyLayerJoins } from "./joins";
 import { MAX_LAYER_LIBRARY_ENTRIES } from "./layer-library";
-import {
-  DEFAULT_ELLIPSOID_ID,
-  getPlanetaryBasemapByStyleUrl,
-  setActiveEllipsoidId,
-} from "./ellipsoids";
-import type { PlanetaryBasemap } from "./ellipsoids";
+import { setActiveEllipsoidId } from "./ellipsoids";
 
 export type ConversionToolKind =
   | "vector-to-vector"
@@ -307,8 +305,12 @@ export interface AppState {
   // history (partialize never lists it).
   collaboration: CollaborationState;
   ui: {
-    /** Which single-screen mode is active (UI_REPURPOSE_PLAN.md §2). Not a route. */
-    activeMode: AppMode;
+    /**
+     * Dock panels, overlay sheet, and timeline visibility for the single-screen
+     * intelligence console (UI_REPURPOSE_PLAN.md §2). Not a route, and not a
+     * one-of-N page selector -- see {@link IntelWorkspaceState}.
+     */
+    intel: IntelWorkspaceState;
     processingOpen: boolean;
     /**
      * Tool id to preselect when the Whitebox toolbox dialog opens, set when the
@@ -331,7 +333,6 @@ export interface AppState {
     // is opened from a layer's context menu, or null when opened without a target.
     loadEditorFeaturesLayerId: string | null;
     pythonConsoleOpen: boolean;
-    assistantOpen: boolean;
     attributeTableOpen: boolean;
     /** Whether the Raster Attribute Table bottom panel is open (issue #1307). */
     rasterAttributeTableOpen: boolean;
@@ -418,18 +419,6 @@ export interface AppState {
   /** Remove one secondary pane and collapse the grid back toward 1x1. */
   removeSecondaryMapView: (id: string) => void;
   setBasemapStyleUrl: (url: string) => void;
-  /**
-   * Apply a planetary basemap and sync the project's ellipsoid to the body it
-   * depicts, so measurements and the globe control use that body's radius. Used
-   * by both the basemap picker and the Layers-panel planet switcher.
-   */
-  applyPlanetaryBasemap: (basemap: PlanetaryBasemap) => void;
-  /**
-   * Return to Earth: apply `styleUrl` (typically the Earth basemap that was
-   * active before a planet was selected, e.g. Liberty) and reset the ellipsoid
-   * to Earth. Used when a planet is deselected in the switcher.
-   */
-  restoreEarthBasemap: (styleUrl: string) => void;
   setBasemapVisible: (visible: boolean) => void;
   setBasemapOpacity: (opacity: number) => void;
   setPreferences: (preferences: ProjectPreferences) => void;
@@ -451,7 +440,12 @@ export interface AppState {
   selectFeatures: (ids: string[], anchorId?: string | null) => void;
   setIdentifyLayer: (id: string | null) => void;
   setAttributeFilter: (filter: string) => void;
-  setActiveMode: (mode: AppMode) => void;
+  /** Open a dock panel if closed, close it if open. */
+  toggleIntelPanel: (panel: IntelDockPanel) => void;
+  closeIntelPanel: (panel: IntelDockPanel) => void;
+  /** Show an overlay sheet, or pass null to dismiss whichever one is up. */
+  setIntelSheet: (sheet: IntelConsoleSheet | null) => void;
+  setIntelTimelineOpen: (open: boolean) => void;
   setProcessingOpen: (open: boolean) => void;
   setProcessingInitialTool: (toolId: string | null) => void;
   setConversionOpen: (kind: ConversionToolKind | null) => void;
@@ -466,7 +460,6 @@ export interface AppState {
   setSqlWorkspaceOpen: (open: boolean) => void;
   setLoadEditorFeaturesOpen: (open: boolean, layerId?: string | null) => void;
   setPythonConsoleOpen: (open: boolean) => void;
-  setAssistantOpen: (open: boolean) => void;
   setAttributeTableOpen: (open: boolean) => void;
   setRasterAttributeTableOpen: (open: boolean) => void;
   setDashboardOpen: (open: boolean) => void;
@@ -1049,7 +1042,7 @@ export const useAppStore = create<AppState>()(
       attributeFilter: "",
       collaboration: DEFAULT_COLLABORATION_STATE,
       ui: {
-        activeMode: DEFAULT_APP_MODE,
+        intel: DEFAULT_INTEL_WORKSPACE,
         processingOpen: false,
         processingInitialTool: null,
         conversionOpen: null,
@@ -1065,7 +1058,6 @@ export const useAppStore = create<AppState>()(
         loadEditorFeaturesOpen: false,
         loadEditorFeaturesLayerId: null,
         pythonConsoleOpen: false,
-        assistantOpen: false,
         attributeTableOpen: false,
         rasterAttributeTableOpen: false,
         dashboardOpen: false,
@@ -1281,36 +1273,6 @@ export const useAppStore = create<AppState>()(
           };
         }),
       setBasemapStyleUrl: (url) => set({ basemapStyleUrl: url, isDirty: true }),
-      applyPlanetaryBasemap: (basemap) =>
-        set((state) => ({
-          basemapStyleUrl: basemap.styleUrl,
-          preferences:
-            state.preferences.map.ellipsoidId === basemap.ellipsoidId
-              ? state.preferences
-              : {
-                  ...state.preferences,
-                  map: {
-                    ...state.preferences.map,
-                    ellipsoidId: basemap.ellipsoidId,
-                  },
-                },
-          isDirty: true,
-        })),
-      restoreEarthBasemap: (styleUrl) =>
-        set((state) => ({
-          basemapStyleUrl: styleUrl,
-          preferences:
-            state.preferences.map.ellipsoidId === DEFAULT_ELLIPSOID_ID
-              ? state.preferences
-              : {
-                  ...state.preferences,
-                  map: {
-                    ...state.preferences.map,
-                    ellipsoidId: DEFAULT_ELLIPSOID_ID,
-                  },
-                },
-          isDirty: true,
-        })),
       setBasemapVisible: (visible) => set({ basemapVisible: visible, isDirty: true }),
       setBasemapOpacity: (opacity) => set({ basemapOpacity: opacity, isDirty: true }),
       setPreferences: (preferences) => set({ preferences, isDirty: true }),
@@ -1346,7 +1308,30 @@ export const useAppStore = create<AppState>()(
         }),
       setIdentifyLayer: (id) => set({ identifyLayerId: id }),
       setAttributeFilter: (filter) => set({ attributeFilter: filter }),
-      setActiveMode: (mode) => set((s) => ({ ui: { ...s.ui, activeMode: mode } })),
+      // Panel order is normalized against INTEL_DOCK_PANELS rather than
+      // appended in click order, so a dock's contents read the same way every
+      // time regardless of how the analyst got there.
+      toggleIntelPanel: (panel) =>
+        set((s) => {
+          const open = s.ui.intel.openPanels.includes(panel);
+          const next = open
+            ? s.ui.intel.openPanels.filter((id) => id !== panel)
+            : INTEL_DOCK_PANELS.filter((id) => id === panel || s.ui.intel.openPanels.includes(id));
+          return { ui: { ...s.ui, intel: { ...s.ui.intel, openPanels: next } } };
+        }),
+      closeIntelPanel: (panel) =>
+        set((s) => ({
+          ui: {
+            ...s.ui,
+            intel: {
+              ...s.ui.intel,
+              openPanels: s.ui.intel.openPanels.filter((id) => id !== panel),
+            },
+          },
+        })),
+      setIntelSheet: (sheet) => set((s) => ({ ui: { ...s.ui, intel: { ...s.ui.intel, sheet } } })),
+      setIntelTimelineOpen: (open) =>
+        set((s) => ({ ui: { ...s.ui, intel: { ...s.ui.intel, timelineOpen: open } } })),
       setProcessingOpen: (open) => set((s) => ({ ui: { ...s.ui, processingOpen: open } })),
       setProcessingInitialTool: (toolId) =>
         set((s) => ({ ui: { ...s.ui, processingInitialTool: toolId } })),
@@ -1383,7 +1368,6 @@ export const useAppStore = create<AppState>()(
           },
         })),
       setPythonConsoleOpen: (open) => set((s) => ({ ui: { ...s.ui, pythonConsoleOpen: open } })),
-      setAssistantOpen: (open) => set((s) => ({ ui: { ...s.ui, assistantOpen: open } })),
       setAttributeTableOpen: (open) => set((s) => ({ ui: { ...s.ui, attributeTableOpen: open } })),
       setRasterAttributeTableOpen: (open) =>
         set((s) => ({ ui: { ...s.ui, rasterAttributeTableOpen: open } })),
@@ -2406,29 +2390,14 @@ useAppStore.subscribe((state) => {
  * drop a `selectedLayerId` that no longer points at an existing layer (selection
  * is intentionally not tracked in history, so it can dangle after a restore).
  */
-function finishHistoryStep(previousBasemapStyleUrl: string): void {
+function finishHistoryStep(): void {
   const s = useAppStore.getState();
   const selectionDangling =
     s.selectedLayerId !== null && !s.layers.some((layer) => layer.id === s.selectedLayerId);
-  // The basemap is in the undo history but the ellipsoid preference is not, so a
-  // step that restores a *different* basemap can leave the two out of sync (e.g.
-  // undoing a switch to Mars would keep the Mars radius under an Earth basemap).
-  // Re-derive the ellipsoid from the restored basemap's body — Earth for a
-  // non-planetary basemap — but only when this step actually changed the
-  // basemap. Steps that leave the basemap untouched must not touch the ellipsoid,
-  // which the user can set independently of the basemap in Settings.
-  const restoredEllipsoidId =
-    getPlanetaryBasemapByStyleUrl(s.basemapStyleUrl)?.ellipsoidId ?? DEFAULT_ELLIPSOID_ID;
-  const ellipsoidPatch =
-    s.basemapStyleUrl !== previousBasemapStyleUrl &&
-    s.preferences.map.ellipsoidId !== restoredEllipsoidId
-      ? {
-          preferences: {
-            ...s.preferences,
-            map: { ...s.preferences.map, ellipsoidId: restoredEllipsoidId },
-          },
-        }
-      : {};
+  // Upstream re-derived the ellipsoid from the restored basemap here, because a
+  // basemap switch could change the celestial body while the ellipsoid
+  // preference sat outside undo history. With Earth the only body, there is
+  // nothing to re-derive: the ellipsoid cannot disagree with the basemap.
   useAppStore.setState(
     selectionDangling
       ? {
@@ -2436,9 +2405,8 @@ function finishHistoryStep(previousBasemapStyleUrl: string): void {
           selectedLayerId: null,
           selectedFeatureId: null,
           selectedFeatureIds: [],
-          ...ellipsoidPatch,
         }
-      : { isDirty: true, ...ellipsoidPatch },
+      : { isDirty: true },
   );
   // The setState above must not leave a coalesce window open for the next edit.
   cancelHistoryCoalesce();
@@ -2473,9 +2441,8 @@ export function undo(): void {
   }
   if (temporal.pastStates.length === 0) return; // nothing to undo; stay clean
   cancelHistoryCoalesce(); // break any in-flight burst so the next edit records
-  const previousBasemapStyleUrl = useAppStore.getState().basemapStyleUrl;
   temporal.undo();
-  finishHistoryStep(previousBasemapStyleUrl);
+  finishHistoryStep();
 }
 
 /** Step the history forward one entry and mark the project dirty. */
@@ -2502,9 +2469,8 @@ export function redo(): void {
   }
   if (temporal.futureStates.length === 0) return; // nothing to redo; stay clean
   cancelHistoryCoalesce(); // break any in-flight burst so the next edit records
-  const previousBasemapStyleUrl = useAppStore.getState().basemapStyleUrl;
   temporal.redo();
-  finishHistoryStep(previousBasemapStyleUrl);
+  finishHistoryStep();
 }
 
 /** Empty both the undo and redo stacks (e.g. on new/loaded project). */

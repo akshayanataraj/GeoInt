@@ -379,24 +379,33 @@ describe("points along geometry tool", () => {
     assert.equal(points[2].properties?.distance, 0);
   });
 
-  it("scales the interval and distance column by the active body's radius", () => {
-    // Mars' mean radius is ~0.53 of Earth's, so a 100 km Mars interval covers
-    // ~1.88x the angle a 100 km Earth interval does: fewer points on the same
-    // line, and the distance column still reads in Mars kilometres.
+  it("does not rescale the interval for a removed body id", () => {
+    // This used to assert Mars' ~0.53 radius ratio produced fewer points and a
+    // Mars-kilometre distance column. Earth is the only ellipsoid now, so a
+    // stale body id in an old project must leave the spacing on Earth's radius.
+    const earthRun = runTool("points-along-geometry", [line], {
+      layer: "line",
+      interval: 100,
+      units: "kilometers",
+    }).results[0].features;
     setActiveEllipsoidId("mars");
     try {
-      const { results } = runTool("points-along-geometry", [line], {
+      const points = runTool("points-along-geometry", [line], {
         layer: "line",
         interval: 100,
         units: "kilometers",
-      });
-      const points = results[0].features;
-      const earthTotal = distance([0, 0], [3, 0], { units: "kilometers" });
-      const marsTotal = points[points.length - 1].properties?.distance as number;
-      assert.ok(marsTotal < earthTotal * 0.6, `${marsTotal} vs ${earthTotal}`);
-      // 0 and 100 km fit; 200 km does not (~177 km on Mars).
-      assert.deepEqual(points.map((p) => p.properties?.distance).slice(0, 2), [0, 100]);
-      assert.equal(points.length, 3);
+      }).results[0].features;
+      assert.equal(points.length, earthRun.length);
+      assert.deepEqual(
+        points.map((p) => p.properties?.distance),
+        earthRun.map((p) => p.properties?.distance),
+      );
+      // Sanity that the fixture still spans roughly the whole line on Earth's
+      // radius. Compared loosely: the tool rounds its distance column to 6
+      // decimals, so it can sit a hair above the raw great-circle total.
+      const total = distance([0, 0], [3, 0], { units: "kilometers" });
+      const last = points[points.length - 1].properties?.distance as number;
+      assert.ok(Math.abs(last - total) < 0.001, `${last} vs ${total}`);
     } finally {
       setActiveEllipsoidId("earth");
     }

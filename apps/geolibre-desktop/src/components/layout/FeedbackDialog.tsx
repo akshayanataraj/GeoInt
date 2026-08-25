@@ -14,7 +14,7 @@ interface FeedbackDialogProps {
 
 /**
  * Placeholder for the feature spec's feedback surface (§13): reachable from
- * every mode via `ModeDock`'s floating action, not wired to a backend
+ * every surface via the console rail's feedback action, not wired to a backend
  * yet. Replace the body with the real survey form in a later phase.
  */
 export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {

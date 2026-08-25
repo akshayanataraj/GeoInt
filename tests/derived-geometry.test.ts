@@ -137,7 +137,7 @@ describe("buildGeneratedGeometry", () => {
     }
   });
 
-  it("widens a buffer on Mars so it covers the requested Martian metres", () => {
+  it("does not rescale a buffer for a removed body id", () => {
     const fc = collection({
       type: "Feature",
       properties: {},
@@ -152,12 +152,10 @@ describe("buildGeneratedGeometry", () => {
         Math.max(
           ...(fcArg.features[0].geometry as Polygon).coordinates[0].map(([x]) => Math.abs(x)),
         );
-      // turf lays the buffer out in Earth degrees, so covering 100 km of
-      // Martian ground needs ~1.88x the angular radius (issue #1128).
-      assert.ok(
-        Math.abs(radius(mars) / radius(earth) - 1 / 0.532) < 0.02,
-        `expected ~1.88x the angular radius, got ${radius(mars) / radius(earth)}`,
-      );
+      // This used to assert ~1.88x the angular radius for Martian ground
+      // (GeoLibre#1128). Earth is the only ellipsoid now, so a stale body id
+      // must leave the buffer exactly as Earth laid it out.
+      assert.equal(radius(mars), radius(earth));
     } finally {
       setActiveEllipsoidId("earth");
     }

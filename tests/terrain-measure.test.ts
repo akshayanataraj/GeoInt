@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { setActiveEllipsoidId } from "@geolibre/core";
 
 import {
   buildAreaGrid,
@@ -382,26 +381,5 @@ describe("terrain-measure readout", () => {
     });
     assert.match(rows[0][1], /ha$/);
     assert.match(rows[1][1], /°$/);
-  });
-
-  it("returns null when the only source is terrain and it is off (non-Earth)", async () => {
-    setActiveEllipsoidId("moon");
-    try {
-      const readout = await computeTerrainReadout(
-        {
-          id: "m4",
-          mode: "distance",
-          points: [
-            { lng: 0, lat: 0 },
-            { lng: 0, lat: 0.01 },
-          ],
-          distance: 1113,
-        },
-        { getTerrain: () => null, queryTerrainElevation: () => null },
-      );
-      assert.equal(readout, null);
-    } finally {
-      setActiveEllipsoidId("earth");
-    }
   });
 });

@@ -227,9 +227,13 @@ export async function computeTerrainReadout(
 }
 
 /**
- * Sample elevations for the given points: map terrain first, the remote API
- * (Earth only) when terrain is off or produced nothing usable. Returns null
- * when no source is available.
+ * Sample elevations for the given points: map terrain first, then the remote API
+ * when terrain is off or produced nothing usable. Returns null when no source is
+ * available.
+ *
+ * Upstream skipped the remote source outright for a non-Earth body, since
+ * Open-Meteo has no data off Earth. Earth is the only body this product ships,
+ * so that guard is gone -- it could never fire.
  */
 async function sampleElevations(
   points: LngLat[],
@@ -238,7 +242,6 @@ async function sampleElevations(
 ): Promise<(number | null)[] | null> {
   const fromTerrain = sampleMapTerrain(map, points);
   if (fromTerrain && fromTerrain.some((e) => e !== null)) return fromTerrain;
-  if (getActiveEllipsoid().id !== "earth") return null;
   const fromRemote = await sampleRemoteElevations(points, fetchImpl);
   return fromRemote.some((e) => e !== null) ? fromRemote : null;
 }

@@ -2,10 +2,8 @@ import {
   BLANK_BASEMAP,
   DEFAULT_BASEMAP,
   DEFAULT_PROJECT_PREFERENCES,
-  getPlanetaryBasemapByStyleUrl,
   getRegionalBasemapByStyleUrl,
   isRegionalBasemapSentinel,
-  PLANETARY_BASEMAP_SENTINEL_PREFIX,
   type RegionalBasemap,
   scaleAltitudeToActiveBody,
   useAppStore,
@@ -16,7 +14,6 @@ import type {
   MapPreferences,
   MapProjection,
   MapViewState,
-  PlanetaryBasemap,
   StoryChapterAnimation,
   StoryChapterLocation,
 } from "@geolibre/core";
@@ -285,16 +282,10 @@ function resolveMapStyle(styleUrl: string | undefined): string | maplibregl.Styl
     // resolve it rather than handing MapLibre an unfetchable geolibre:// URL.
     return resolveMapStyle(DEFAULT_BASEMAP);
   }
-  const planetary = getPlanetaryBasemapByStyleUrl(styleUrl);
-  if (planetary) return createPlanetaryMapStyle(planetary);
-  // A planetary sentinel that no longer resolves (e.g. a project saved with a
-  // basemap id that has since been renamed) must not be handed to MapLibre as a
-  // style URL — it would try to fetch the `geolibre://` sentinel and blank the
-  // map. Fall back to the default basemap instead.
-  if (styleUrl?.startsWith(PLANETARY_BASEMAP_SENTINEL_PREFIX)) {
-    console.warn(`Unknown planetary basemap "${styleUrl}"; falling back to the default basemap.`);
-    return resolveMapStyle(DEFAULT_BASEMAP);
-  }
+  // Planetary basemaps are gone (this is Earth-only), but a project saved by an
+  // older build can still carry a `geolibre://basemap/<id>` sentinel. Handing
+  // that to MapLibre would have it try to fetch the sentinel and blank the map,
+  // so fall through to the default basemap below rather than resolving it.
   const regional = getRegionalBasemapByStyleUrl(styleUrl);
   if (regional) return createRegionalMapStyle(regional);
   // Same guard as the planetary path: a regional sentinel that no longer
@@ -353,44 +344,6 @@ function createRegionalMapStyle(basemap: RegionalBasemap): maplibregl.StyleSpeci
             },
           ]
         : []),
-    ],
-  };
-}
-
-/**
- * A single-source raster style for a celestial body — the Moon/Mars mosaics or
- * the Earth satellite imagery the planet switcher uses. The tiles are images in
- * that body's Web-Mercator scheme (XYZ, or TMS when `basemap.scheme` says so),
- * so MapLibre renders them like any raster basemap. A dark background shows
- * through at zoom levels the source doesn't cover, matching how the planetary
- * tiles fade to black at the poles (and reading as space around the globe).
- */
-function createPlanetaryMapStyle(basemap: PlanetaryBasemap): maplibregl.StyleSpecification {
-  return {
-    version: 8,
-    sources: {
-      "planetary-basemap": {
-        type: "raster",
-        tiles: [basemap.tileUrl],
-        tileSize: 256,
-        maxzoom: basemap.maxZoom,
-        // OpenPlanetaryMap's S3 mosaics are TMS (flipped Y); the CARTO named
-        // maps are XYZ. MapLibre defaults to "xyz" when scheme is omitted.
-        ...(basemap.scheme ? { scheme: basemap.scheme } : {}),
-        attribution: basemap.attribution,
-      },
-    },
-    layers: [
-      {
-        id: BLANK_BACKGROUND_LAYER_ID,
-        type: "background",
-        paint: { "background-color": "#000000" },
-      },
-      {
-        id: "planetary-basemap",
-        type: "raster",
-        source: "planetary-basemap",
-      },
     ],
   };
 }
@@ -1030,7 +983,7 @@ export class MapController {
     if (!this.map) return;
     this.basemapStyleUrl = url;
     this.applyStyleToMap(url);
-    // Switching to/from a planetary basemap changes the active body (the store's
+    // Upstream, switching to/from a planetary basemap changed the active body (the store's
     // ellipsoid subscription runs first, so the singleton is already current),
     // so redraw the scale bar for the new radius without waiting for a pan.
     this.scaleControl?.refresh();

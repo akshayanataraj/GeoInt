@@ -192,12 +192,13 @@ describe("geometry-measure", () => {
     );
   });
 
-  it("honors the active ellipsoid's radius", () => {
+  it("measures against Earth's radius, including for a removed body id", () => {
+    // This used to assert the Moon read ~27% of Earth. Earth is the only
+    // ellipsoid now, so what matters is that a body id left in an old project
+    // resolves to Earth instead of scaling the measurement by a stale radius.
     const earth = measureLength(EQUATOR_SEGMENT, "meters");
     setActiveEllipsoidId("moon");
-    const moon = measureLength(EQUATOR_SEGMENT, "meters");
-    // The Moon's radius is roughly 27% of Earth's, so the same span is shorter.
-    assert.ok(moon < earth * 0.3, `moon ${moon} vs earth ${earth}`);
+    assert.equal(measureLength(EQUATOR_SEGMENT, "meters"), earth);
   });
 
   it("detects the set of present geometry families", () => {

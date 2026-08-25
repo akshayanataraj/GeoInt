@@ -1,10 +1,7 @@
 import {
   BLANK_BASEMAP,
   REGIONAL_BASEMAPS,
-  PLANETARY_BASEMAP_GROUPS,
-  PLANETARY_BASEMAPS,
   useAppStore,
-  type PlanetaryBasemap,
   type RegionalBasemap,
 } from "@geolibre/core";
 import {
@@ -29,7 +26,6 @@ import {
   type PresetBasemap,
 } from "../../lib/basemap-presets";
 import { isOfflineBasemapSentinel, PROTOMAPS_FLAVORS, type ProtomapsFlavor } from "@geolibre/map";
-import { planetaryBasemapLabel, planetaryBasemapSectionKey } from "../../lib/planetary-sections";
 import { buildRemotePmtilesBasemap, isPmtilesStyleUrl } from "../../lib/pmtiles-basemap-url";
 import { CollapsibleSection } from "../CollapsibleSection";
 import { RegionalBasemapSection } from "./RegionalBasemapSection";
@@ -111,7 +107,6 @@ export function BasemapPickerDialog({ open, onOpenChange }: BasemapPickerDialogP
   const basemapStyleUrl = useAppStore((s) => s.basemapStyleUrl);
   const setBasemapStyleUrl = useAppStore((s) => s.setBasemapStyleUrl);
   const setMapView = useAppStore((s) => s.setMapView);
-  const applyPlanetaryBasemap = useAppStore((s) => s.applyPlanetaryBasemap);
 
   const openFreeMapPresets = useMemo(() => getOpenFreeMapPresets(), []);
   // Protomaps styles need an API key (VITE_PROTOMAPS_API_KEY). It can come from
@@ -132,11 +127,6 @@ export function BasemapPickerDialog({ open, onOpenChange }: BasemapPickerDialogP
     () => [
       ...openFreeMapPresets,
       ...protomapsPresets,
-      ...PLANETARY_BASEMAPS.map((b) => ({
-        id: b.id,
-        name: b.name,
-        styleUrl: b.styleUrl,
-      })),
       ...REGIONAL_BASEMAPS.map((b) => ({
         id: b.id,
         name: b.name,
@@ -192,16 +182,6 @@ export function BasemapPickerDialog({ open, onOpenChange }: BasemapPickerDialogP
     onOpenChange(false);
   };
 
-  // Selecting a planetary basemap also switches the project's celestial body so
-  // measurements (distance/area/scale) use that body's radius, and the globe
-  // control renders it as the correct sphere.
-  const applyPlanetary = (basemap: PlanetaryBasemap) => {
-    applyPlanetaryBasemap(basemap);
-    onOpenChange(false);
-  };
-
-  // A regional basemap is a plain raster style for Earth, so unlike the
-  // planetary ones it only swaps the style and leaves the ellipsoid alone.
   const applyRegional = (basemap: RegionalBasemap) => {
     setBasemapStyleUrl(basemap.styleUrl);
     onOpenChange(false);
@@ -277,40 +257,6 @@ export function BasemapPickerDialog({ open, onOpenChange }: BasemapPickerDialogP
           ) : null}
 
           <RegionalBasemapSection selectedId={activeChoice} onSelect={applyRegional} />
-
-          {PLANETARY_BASEMAP_GROUPS.map((group) => {
-            const heading = t(planetaryBasemapSectionKey(group.id));
-            const grid = (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {group.basemaps.map((basemap) => (
-                  <PresetButton
-                    key={basemap.id}
-                    name={planetaryBasemapLabel(basemap, group.id)}
-                    selected={activeChoice === basemap.id}
-                    onSelect={() => applyPlanetary(basemap)}
-                  />
-                ))}
-              </div>
-            );
-            // The "other bodies" section holds many entries, so collapse it to
-            // keep the panel short; the Moon/Mars sections stay always-visible.
-            return group.id === "other" ? (
-              <CollapsibleSection
-                key={group.id}
-                title={heading}
-                // Collapsed by default, but auto-expanded when the active basemap
-                // is one of these, so the current selection isn't hidden.
-                defaultOpen={group.basemaps.some((b) => b.id === activeChoice)}
-              >
-                {grid}
-              </CollapsibleSection>
-            ) : (
-              <div key={group.id} className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">{heading}</p>
-                {grid}
-              </div>
-            );
-          })}
 
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">

@@ -69,7 +69,6 @@ export function ProcessingMenu({
   const setSegmentEverythingOpen = useAppStore((s) => s.setSegmentEverythingOpen);
   const setSqlWorkspaceOpen = useAppStore((s) => s.setSqlWorkspaceOpen);
   const setPythonConsoleOpen = useAppStore((s) => s.setPythonConsoleOpen);
-  const setAssistantOpen = useAppStore((s) => s.setAssistantOpen);
   const setDashboardOpen = useAppStore((s) => s.setDashboardOpen);
   const setProcessingHistoryOpen = useAppStore((s) => s.setProcessingHistoryOpen);
 
@@ -140,14 +139,6 @@ export function ProcessingMenu({
       <DropdownMenuContent align="start">
         <DropdownMenuLabel>{t("toolbar.menu.processing")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {show("processing.assistant") && (
-          <>
-            <DropdownMenuItem onSelect={() => setAssistantOpen(true)}>
-              {t("toolbar.command.assistant")}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-          </>
-        )}
         {/* Heads the toolbox block below: the nine category submenus render as
             bare siblings of the GeoLibre Toolbox submenu, so "Conversion"
             (Whitebox) and "GeoLibre Toolbox → Conversion" (app dialog)

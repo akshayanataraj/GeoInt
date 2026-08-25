@@ -71,7 +71,7 @@ export function AuthGate({ children }: AuthGateProps) {
     <div className="flex h-screen w-screen items-center justify-center bg-background p-4">
       <form
         onSubmit={handleSubmit}
-        className="geoint-mode-fade-in w-full max-w-sm space-y-5 rounded-2xl border bg-card p-8 shadow-lg"
+        className="geoint-fade-in w-full max-w-sm space-y-5 rounded-2xl border bg-card p-8 shadow-lg"
       >
         <div className="flex flex-col items-center gap-2 text-center">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-primary/25 bg-background">
