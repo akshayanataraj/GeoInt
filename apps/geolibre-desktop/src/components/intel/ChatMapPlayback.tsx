@@ -442,17 +442,18 @@ function dotInner(root: HTMLElement): HTMLElement {
 }
 
 function applyDotState(el: HTMLElement, location: ChatMapLocation, state: DotState): void {
-  const size = state === "current" ? 16 : 10;
-  // `severityText` (a solid `color`) plus `bg-current` -- the same pairing
-  // `S2MetricsPanel`'s severity bar uses -- so the dot renders as a solid
-  // filled colour rather than the translucent wash `severityBg` is tuned for.
+  // A fixed 10px box growing via `scale` rather than an animated `width`/
+  // `height` -- `transition-transform` (already on this element) animates
+  // `transform` smoothly for free, but a plain CSS `transition` property list
+  // does not cover `width`/`height` unless named explicitly, so the previous
+  // literal size swap popped instantly between 10px and 16px. That abrupt pop,
+  // right as the card above it appears, is what read as the dot and the card
+  // just "switching" rather than one smooth motion.
   el.className = cn(
-    "rounded-full border-2 border-background bg-current transition-transform",
+    "h-2.5 w-2.5 rounded-full border-2 border-background bg-current transition-transform",
     state === "pending" ? "text-muted-foreground/60" : eventSeverityText(location.severity),
-    state === "current" && "geoint-pulse ring-4 ring-current/25",
+    state === "current" && "geoint-pulse scale-[1.6] ring-4 ring-current/25",
   );
-  el.style.width = `${size}px`;
-  el.style.height = `${size}px`;
 }
 
 /** Bare marker root plus the one child every card style function targets -- see `createDotElement`'s docstring for why the root itself must never be restyled. */
@@ -493,8 +494,13 @@ function applyCardState(
 }
 
 function initRevealingStack(el: HTMLElement, location: ChatMapLocation): void {
+  // `geoint-card-grow`, not the generic `geoint-fade-in`: this is the card's
+  // very first appearance at a newly-active location, right above its
+  // severity dot, and growing up from that anchor point reads as one
+  // continuous motion instead of the dot and an already-full-size rectangle
+  // just swapping in with nothing visually connecting them.
   el.className = cn(
-    "geoint-fade-in map-glass max-h-[480px] w-[380px] overflow-y-auto rounded-xl border border-l-[3px] border-current/35 p-3 shadow-lg motion-reduce:animate-none",
+    "geoint-card-grow map-glass max-h-[480px] w-[380px] overflow-y-auto rounded-xl border border-l-[3px] border-current/35 p-3 shadow-lg motion-reduce:animate-none",
     eventSeverityText(location.severity),
   );
 
@@ -646,10 +652,25 @@ function renderMergedBadge(el: HTMLElement, location: ChatMapLocation): void {
   el.appendChild(count);
 }
 
-/** The full item list a merged badge expands into when clicked. */
+/**
+ * The full item list a merged badge expands into when clicked.
+ *
+ * Uses `geoint-sheet-in` rather than the generic `geoint-fade-in` every other
+ * mode here uses -- reads more like a panel rising over the map for what is
+ * the one moment in this whole sequence a *click* triggers rather than the
+ * autoplay timeline, and it happens to matter functionally too: `el` is the
+ * same DOM node across a mode change (only its content is rebuilt, see
+ * `applyCardState`), and a CSS animation does not replay just because the
+ * className string is reassigned unless the animation-name itself changes
+ * value -- `renderMergedBadge` also uses `geoint-fade-in`, so collapsing then
+ * re-expanding would not have replayed the entrance at all. A distinct name
+ * per mode guarantees a real value change every time, which is what actually
+ * makes this "click it again after the whole sequence is done and it still
+ * animates" rather than a one-time transition.
+ */
 function renderExpandedList(el: HTMLElement, location: ChatMapLocation): void {
   el.className = cn(
-    "geoint-fade-in map-glass max-h-[480px] w-[420px] cursor-default overflow-y-auto rounded-xl border border-l-[3px] border-current/35 p-3 shadow-lg motion-reduce:animate-none",
+    "geoint-sheet-in map-glass max-h-[480px] w-[420px] cursor-default overflow-y-auto rounded-xl border border-l-[3px] border-current/35 p-3 shadow-lg motion-reduce:animate-none",
     eventSeverityText(location.severity),
   );
 
@@ -684,7 +705,18 @@ function renderExpandedList(el: HTMLElement, location: ChatMapLocation): void {
   const list = document.createElement("div");
   list.className = "mt-2.5 grid grid-cols-2 gap-2";
   location.items.forEach((item, index) => {
-    list.appendChild(createItemRow(item, index, location.items.length));
+    const row = createItemRow(item, index, location.items.length);
+    // A small cascade rather than every tile's `geoint-fade-in` firing on the
+    // exact same frame -- this is the one place all of a location's items
+    // appear at once (`syncRevealingStack` already staggers naturally, one
+    // real fade-in per revealed item over time), so without this the whole
+    // grid reads as a single flat "pop" instead of a sequence. `fillMode:
+    // "backwards"` matters here, not just polish: without it the delay would
+    // leave the tile at its normal (visible) styles until the animation
+    // starts, flashing it in early and fading it in a second time.
+    row.style.animationDelay = `${Math.min(index, 6) * 35}ms`;
+    row.style.animationFillMode = "backwards";
+    list.appendChild(row);
   });
   el.appendChild(list);
 }

@@ -99,7 +99,15 @@ export function SharedSidebar({
   // which is the desired "collapsed by default" behavior on reopen.
   const [builtinOptedIn, setBuiltinOptedIn] = useState(initialBuiltinExpanded);
 
-  const panelIds = [pluginId, ...additionalPanelIds.filter((id) => id !== pluginId)];
+  // `additionalPanelIds` already lists every panel sharing this rail --
+  // `pluginId` included -- in the registry's stable insertion order.
+  // Previously this always put `pluginId` (whichever panel is currently
+  // active) first, which is what made clicking a rail icon jump it to the
+  // top of the rail instead of leaving every icon where it was; the fallback
+  // only covers a future caller that omits it from `additionalPanelIds`.
+  const panelIds = additionalPanelIds.includes(pluginId)
+    ? additionalPanelIds
+    : [pluginId, ...additionalPanelIds];
   const pluginExpanded = panelIds.includes(activeId ?? "") && !collapsed;
   // The plugin displaces the built-in panel: one shared surface, one expanded
   // panel at a time. `forceBuiltinCollapsed` gates this too (it only gates, never

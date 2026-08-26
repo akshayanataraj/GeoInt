@@ -1,9 +1,9 @@
 import { Button, Textarea, cn } from "@geolibre/ui";
 import {
   AlertTriangle,
+  Bot,
   ChevronDown,
   ExternalLink,
-  MessageSquare,
   Send,
 } from "lucide-react";
 import {
@@ -390,7 +390,7 @@ export function IntelChatPanel() {
 function EmptyState() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-      <MessageSquare className="h-5 w-5 text-muted-foreground/50" aria-hidden />
+      <Bot className="h-5 w-5 text-muted-foreground/50" aria-hidden />
       <p className="text-xs text-muted-foreground">
         Ask a question about indexed reporting. Answers cite their sources.
       </p>

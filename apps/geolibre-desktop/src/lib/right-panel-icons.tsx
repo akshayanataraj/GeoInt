@@ -1,4 +1,4 @@
-import { MessageCircle, MessageSquare, type LucideIcon } from "lucide-react";
+import { Bot, MessageSquare, type LucideIcon } from "lucide-react";
 import { COMMENTS_PANEL_ID } from "../hooks/useRegisterCommentsPanel";
 import { ANALYST_CHAT_PANEL_ID } from "../hooks/useRegisterAnalystChatPanel";
 
@@ -18,11 +18,11 @@ import { ANALYST_CHAT_PANEL_ID } from "../hooks/useRegisterAnalystChatPanel";
  *
  * `MessageSquare` for Comments matches the icon GeoLibre's own "Add comment"
  * command already uses elsewhere in the toolbar (see `TopToolbar.tsx`), so a
- * comment reads as the same concept wherever it appears. Analyst Chat gets the
- * rounder `MessageCircle` specifically so the two are never confusable sitting
- * side by side in the same rail.
+ * comment reads as the same concept wherever it appears. Analyst Chat gets
+ * `Bot` instead of a speech-bubble glyph so it reads as "an AI assistant you
+ * talk to," distinct from Comments' human-to-human annotation at a glance.
  */
 export const RIGHT_PANEL_ICONS: Readonly<Record<string, LucideIcon>> = {
   [COMMENTS_PANEL_ID]: MessageSquare,
-  [ANALYST_CHAT_PANEL_ID]: MessageCircle,
+  [ANALYST_CHAT_PANEL_ID]: Bot,
 };

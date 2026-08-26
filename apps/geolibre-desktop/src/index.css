@@ -4072,6 +4072,30 @@ html.dark .maplibregl-popup-anchor-right:has(.vector-control-popup) .maplibregl-
   animation: geoint-sheet-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* A card growing out of the map marker it is anchored above (the chat map
+   playback's per-location card, see ChatMapPlayback.tsx): `transform-origin:
+   bottom center` pins the animated scale to the card's anchor point -- the
+   same spot the severity dot sits at -- so it visually reads as rising up out
+   of that point rather than fading in already full-size and disconnected from
+   the dot beneath it. A plain fade (`geoint-fade-in`'s 1% scale change is
+   imperceptible) read as the round dot and the rectangular card just
+   "switching" between two unrelated shapes with nothing connecting them. */
+@keyframes geoint-card-grow {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.82);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.geoint-card-grow {
+  transform-origin: bottom center;
+  animation: geoint-card-grow 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 /* Live-feed indicator. A slow breath, not a blink: it should register as
    "connected" in peripheral vision and never pull attention off the data. */
 @keyframes geoint-pulse {
@@ -4093,6 +4117,7 @@ html.dark .maplibregl-popup-anchor-right:has(.vector-control-popup) .maplibregl-
   .geoint-dock-in-left,
   .geoint-dock-in-right,
   .geoint-sheet-in,
+  .geoint-card-grow,
   .geoint-pulse {
     animation: none;
   }

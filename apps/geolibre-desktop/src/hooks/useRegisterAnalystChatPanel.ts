@@ -14,12 +14,16 @@ export const ANALYST_CHAT_PANEL_ID = "analyst-chat";
  * system of our own.
  *
  * Called before `useRegisterCommentsPanel()` in `DesktopShell` so Chat enters
- * the registry's visible set first: `SharedSidebar` renders the shared rail as
- * `[activePanelId ?? firstVisibleId, ...remaining, builtin Style]`, so being
- * first here is what puts Chat's rail entry above Comments and above the
- * built-in Style entry (which is always appended last) whenever nothing in the
- * rail is actively expanded -- landing it "above Comments and Style" as asked,
- * not by fixed positioning but by registration order.
+ * the registry's visible set first: `SharedSidebar` renders the shared rail in
+ * that same stable registration order, with the built-in Style entry always
+ * appended last, so being first here is what puts Chat's rail entry above
+ * Comments and above Style -- landing it "above Comments and Style" as asked,
+ * not by fixed positioning but by registration order. That order does not
+ * reshuffle when a panel is opened: `SharedSidebar` previously always
+ * rendered whichever panel was active first, which put a rail icon at the top
+ * of the list the instant it was clicked (reported as icons "jumping" on
+ * selection) -- fixed there, not here, but noted since it's what makes "Chat
+ * stays first" mean the icon never has to physically move to prove it.
  *
  * Unlike Comments, this is not wired to a persisted Settings toggle: there is
  * no "hide Analyst Chat" setting yet, only the always-on registration below.
