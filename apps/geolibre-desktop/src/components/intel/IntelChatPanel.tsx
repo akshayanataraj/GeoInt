@@ -67,10 +67,6 @@ import { AnswerText } from "./AnswerText";
  *   `contracts.ts`'s `MapLocation` for exactly what is and isn't guaranteed
  *   (not every citation resolves to a place, so this can legitimately be
  *   shorter than `citations`, or empty for a source-less/guardrail answer).
- *   `fixtures.ts`'s `FIXTURE_CHAT_MAP_LOCATIONS` is what this was built and
- *   demoed against before the backend shipped real locations; it is no
- *   longer wired to anything (nothing here imports it) but stays as a
- *   reference shape.
  *
  * The two run concurrently rather than off one shared progress number: the
  * map's sequence is a genuine state machine (reveal → merge → next location →

@@ -14,10 +14,9 @@
  * Originally drafted before the backend had any of this (the "render this on
  * the map" tool contract in `UI_REPURPOSE_PLAN.md` §10, `render_map_events`)
  * so the chat panel and map playback overlay could be built against a
- * concrete shape without waiting on backend sign-off; `fixtures.ts`'s
- * `FIXTURE_CHAT_MAP_LOCATIONS` is what exercised it during that period and
- * is no longer wired to anything live (see `IntelChatPanel.tsx`'s module
- * docstring).
+ * concrete shape without waiting on backend sign-off; a fixture dataset
+ * exercised it during that period and has since been deleted now that real
+ * data does (see `IntelChatPanel.tsx`'s module docstring).
  *
  * One location, multiple items: a real answer's evidence naturally clusters
  * by place (several sources reporting on the same district), not one
