@@ -1,4 +1,5 @@
 import { registerRightPanel } from "@geolibre/plugins";
+import { isRightPanelVisible, subscribeRightPanels } from "@geolibre/plugins/right-panel-registry";
 import { useEffect } from "react";
 import { applyRightPanelVisibility } from "../lib/persisted-right-panel";
 
@@ -26,6 +27,19 @@ export const ANALYST_CHAT_PANEL_ID = "analyst-chat";
  * how Comments/Browser behave -- discoverable in the rail without covering the
  * map on load.
  *
+ * The header's close (X) button calls the same `closeRightPanel` any dockable
+ * panel gets, which -- per `persisted-right-panel.ts`'s docstring -- removes
+ * the rail entry entirely rather than just collapsing it; Comments and Browser
+ * can do that because a Settings toggle can always bring them back. Analyst
+ * Chat has no such toggle, so that close reads as the rail icon vanishing for
+ * the rest of the session with no way back (reported as "clicked the cross
+ * and it disappeared from the sidebar"). The subscription below is this
+ * panel's stand-in for that missing toggle: whenever the registry reports
+ * Analyst Chat went invisible, it is immediately reopened and re-collapsed --
+ * so the close button still closes the expanded panel, it just cannot make
+ * the rail entry disappear. `applyRightPanelVisibility` no-ops once it is
+ * already visible, so this does not loop.
+ *
  * `render` is a no-op for the same reason Comments' is: the panel body is a
  * React component needing the app's context (the store, i18n), so it cannot be
  * drawn through the registry's imperative `render(container)`. `DesktopShell`
@@ -44,6 +58,14 @@ export function useRegisterAnalystChatPanel(): void {
       render: () => {},
     });
     applyRightPanelVisibility(ANALYST_CHAT_PANEL_ID, true);
-    return dispose;
+    const unsubscribe = subscribeRightPanels(() => {
+      if (!isRightPanelVisible(ANALYST_CHAT_PANEL_ID)) {
+        applyRightPanelVisibility(ANALYST_CHAT_PANEL_ID, true);
+      }
+    });
+    return () => {
+      unsubscribe();
+      dispose();
+    };
   }, []);
 }

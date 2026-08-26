@@ -49,13 +49,22 @@ export const PROTOMAPS_BASEMAPS = [
   { id: "protomaps-black", name: "Black", flavor: "black" },
 ] as const;
 
-// A regional-basemap sentinel (see regional-basemaps.ts), not a fetchable
-// URL -- resolved to Google Maps' hybrid (satellite + labels) tiles by
-// `resolveMapStyle` (packages/map/src/map-controller.ts). Chosen over the
-// OpenFreeMap default for India's officially depicted borders and a
-// photorealistic default look (see UI_REPURPOSE_PLAN.md §2a); see
-// regional-basemaps.ts's INDIA_BASEMAPS for the ToS caveat that comes with it.
-export const DEFAULT_BASEMAP = "geolibre://regional-basemap/google-hybrid";
+/**
+ * Sentinel for the standard OpenStreetMap raster tiles (the classic
+ * `tile.openstreetmap.org` "Standard" layer), expanded to an inline raster
+ * style by `resolveMapStyle` (`packages/map/src/map-controller.ts`) the same
+ * way the regional and offline sentinels are -- not a fetchable style URL.
+ * Deliberately a distinct prefix from `geolibre://basemap/`, the retired
+ * planetary-basemap sentinel `resolveMapStyle` falls back away from.
+ */
+export const OSM_STANDARD_BASEMAP_STYLE_URL = "geolibre://osm-basemap/standard";
+
+// Chosen as the product default for a familiar, immediately-recognizable
+// basemap look. Previously the google-hybrid regional sentinel (satellite
+// imagery, for India's officially depicted borders and a photorealistic
+// look, see UI_REPURPOSE_PLAN.md §2a); that basemap is still selectable from
+// the Regional section, it is just no longer the default.
+export const DEFAULT_BASEMAP = OSM_STANDARD_BASEMAP_STYLE_URL;
 
 export const BLANK_BASEMAP = "";
 

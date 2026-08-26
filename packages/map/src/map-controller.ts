@@ -4,6 +4,7 @@ import {
   DEFAULT_PROJECT_PREFERENCES,
   getRegionalBasemapByStyleUrl,
   isRegionalBasemapSentinel,
+  OSM_STANDARD_BASEMAP_STYLE_URL,
   type RegionalBasemap,
   scaleAltitudeToActiveBody,
   useAppStore,
@@ -250,12 +251,13 @@ function createBlankMapStyle(): maplibregl.StyleSpecification {
 /**
  * Whether a basemap style URL is one of GeoLibre's internal sentinels rather
  * than something fetchable. Every sentinel kind — planetary (`geolibre://
- * basemap/`), offline (`geolibre://offline-basemap/`), and regional
- * (`geolibre://regional-basemap/`) — is expanded to an inline style by
+ * basemap/`, retired), offline (`geolibre://offline-basemap/`), regional
+ * (`geolibre://regional-basemap/`), and the standard OSM raster basemap
+ * (`geolibre://osm-basemap/`) — is expanded to an inline style by
  * {@link resolveMapStyle} and would throw if handed to `fetch`.
  *
- * Matching on the scheme rather than enumerating the three prefixes keeps a
- * fourth sentinel kind from silently reintroducing that fetch, and covers a
+ * Matching on the scheme rather than enumerating the prefixes keeps a future
+ * sentinel kind from silently reintroducing that fetch, and covers a
  * sentinel whose id no longer resolves (which the per-kind lookups miss).
  */
 function isGeoLibreSentinelStyleUrl(styleUrl: string | undefined): boolean {
@@ -264,6 +266,7 @@ function isGeoLibreSentinelStyleUrl(styleUrl: string | undefined): boolean {
 
 function resolveMapStyle(styleUrl: string | undefined): string | maplibregl.StyleSpecification {
   if (styleUrl === BLANK_BASEMAP) return createBlankMapStyle();
+  if (styleUrl === OSM_STANDARD_BASEMAP_STYLE_URL) return createOsmMapStyle();
   const offline = getOfflineBasemapStyle(styleUrl);
   // Return a fresh copy (like the planetary path below builds a new object each
   // call): MapLibre normalises/mutates the style it's handed, and the registry
@@ -295,6 +298,39 @@ function resolveMapStyle(styleUrl: string | undefined): string | maplibregl.Styl
     return resolveMapStyle(DEFAULT_BASEMAP);
   }
   return styleUrl ?? resolveMapStyle(DEFAULT_BASEMAP);
+}
+
+/**
+ * The classic OpenStreetMap "Standard" raster layer, served from
+ * `tile.openstreetmap.org`. This is the OSM Foundation's own tile server, not
+ * a third-party mirror, so it is subject to their tile usage policy (an
+ * `OpenStreetMap contributors` attribution, and no bulk/offline scraping) --
+ * fine for this console's interactive use, but not a basis for a
+ * high-volume production deployment without switching to a paid provider.
+ */
+function createOsmMapStyle(): maplibregl.StyleSpecification {
+  return {
+    version: 8,
+    sources: {
+      "osm-basemap": {
+        type: "raster",
+        tiles: [
+          "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        ],
+        tileSize: 256,
+        maxzoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      },
+    },
+    layers: [
+      {
+        id: BLANK_BACKGROUND_LAYER_ID,
+        type: "background",
+        paint: { "background-color": BLANK_BACKGROUND_COLOR },
+      },
+      { id: "osm-basemap", type: "raster", source: "osm-basemap" },
+    ],
+  };
 }
 
 /**
@@ -1621,7 +1657,12 @@ export class MapController {
    * duration. Only the provided fields are changed; omitted camera properties
    * keep their current value.
    *
-   * @param camera Target camera. `center` is `[lng, lat]`.
+   * @param camera Target camera. `center` is `[lng, lat]`. `offset`, in
+   *   screen pixels, is where `center` ends up relative to the container's
+   *   true center (MapLibre's own `AnimationOptions.offset`) -- e.g. `[0,
+   *   120]` lands the target 120px below true center, leaving more room
+   *   above it for a UI element anchored there. Omitted keeps MapLibre's own
+   *   default of `[0, 0]`.
    */
   flyTo(camera: {
     center?: [number, number];
@@ -1629,6 +1670,7 @@ export class MapController {
     bearing?: number;
     pitch?: number;
     duration?: number;
+    offset?: [number, number];
   }): void {
     if (!this.map) return;
     this.map.flyTo({
@@ -1636,6 +1678,7 @@ export class MapController {
       ...(typeof camera.zoom === "number" ? { zoom: camera.zoom } : {}),
       ...(typeof camera.bearing === "number" ? { bearing: camera.bearing } : {}),
       ...(typeof camera.pitch === "number" ? { pitch: camera.pitch } : {}),
+      ...(camera.offset ? { offset: camera.offset } : {}),
       duration: typeof camera.duration === "number" ? camera.duration : 800,
     });
   }

@@ -10,13 +10,14 @@ export const DESKTOP_SETTINGS_STORAGE_KEY = "geolibre.desktopSettings";
 
 /**
  * Basemap used to seed the empty workspace on the next app launch. Versioned
- * (`.v2`) because this repurposing changed `DEFAULT_BASEMAP` (India/Google
- * Hybrid, see UI_REPURPOSE_PLAN.md §2a) -- an unversioned key would keep
- * replaying whatever basemap was stored under the old default from earlier
+ * because `DEFAULT_BASEMAP` has changed twice during this repurposing --
+ * first to India/Google Hybrid (`.v2`, see UI_REPURPOSE_PLAN.md §2a), now to
+ * the standard OSM raster basemap (`.v3`) -- and an unversioned key would keep
+ * replaying whatever basemap was stored under a previous default from earlier
  * testing sessions, silently masking the new default forever on any browser
  * that already has an entry. Bump again if the default changes again.
  */
-export const LAST_BASEMAP_STORAGE_KEY = "geolibre.lastBasemap.v2";
+export const LAST_BASEMAP_STORAGE_KEY = "geolibre.lastBasemap.v3";
 
 /**
  * Latest version the user dismissed via "Skip this version" in the automated

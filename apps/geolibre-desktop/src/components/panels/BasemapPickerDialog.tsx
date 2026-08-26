@@ -1,5 +1,6 @@
 import {
   BLANK_BASEMAP,
+  OSM_STANDARD_BASEMAP_STYLE_URL,
   REGIONAL_BASEMAPS,
   useAppStore,
   type RegionalBasemap,
@@ -38,6 +39,7 @@ const THREE_D_PITCH = 60;
 const BLANK_CHOICE = "__blank__";
 const CUSTOM_CHOICE = "__custom__";
 const OFFLINE_CHOICE = "__offline__";
+const OSM_CHOICE = "__osm__";
 
 // The last custom URL (and PMTiles flavor) the user applied, so the field is
 // repopulated next time the picker opens — a PMTiles basemap resolves to an
@@ -144,6 +146,11 @@ export function BasemapPickerDialog({ open, onOpenChange }: BasemapPickerDialogP
     // An offline/PMTiles basemap is a runtime sentinel, not a real style URL —
     // don't treat it as a custom URL (its sentinel would fail URL validation).
     if (isOfflineBasemapSentinel(basemapStyleUrl)) return OFFLINE_CHOICE;
+    // Same reasoning for the standard-OSM sentinel: it has no preset button of
+    // its own yet, but it must not fall into CUSTOM_CHOICE either, since that
+    // would seed the custom-URL field with a `geolibre://` string that fails
+    // this dialog's own URL validation.
+    if (basemapStyleUrl === OSM_STANDARD_BASEMAP_STYLE_URL) return OSM_CHOICE;
     const preset = allPresets.find((p) => p.styleUrl === basemapStyleUrl);
     return preset ? preset.id : CUSTOM_CHOICE;
   }, [allPresets, basemapStyleUrl]);

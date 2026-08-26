@@ -24,7 +24,7 @@
  */
 
 import type { ChatResponse, NewsTopic } from "./contracts";
-import type { ChatMapEvent } from "./map-events-contract";
+import type { ChatMapLocation } from "./map-events-contract";
 import type { S2Cell, S2Summary } from "./s2-contracts";
 
 /** Fixed reference instant for every timestamp below. */
@@ -238,48 +238,165 @@ export const FIXTURE_CHAT_RESPONSE: ChatResponse = {
 };
 
 /**
- * A sample event sequence for the chat-driven map playback (`ChatMapPlayback`,
- * `chat-map-sequence.ts`), tied to the same rail-disruption narrative as
- * `FIXTURE_CHAT_RESPONSE` -- three real points along the actual
- * Amritsar-Ambala-Delhi rail corridor, dated to match `FIXTURE_NEWS_TOPICS[0]`'s
- * timeline.
+ * A sample location sequence for the chat-driven map playback
+ * (`ChatMapPlayback`, `chat-map-sequence.ts`), tied to the same
+ * rail-disruption narrative as `FIXTURE_CHAT_RESPONSE` -- three real points
+ * along the actual Amritsar-Ambala-Delhi rail corridor, each with several
+ * items an analyst would actually find reported from that place, dated to
+ * match `FIXTURE_NEWS_TOPICS[0]`'s timeline. Each location carries 4-5 items
+ * (rather than the bare two or three a real citation list would give) so the
+ * bento grid in `ChatMapPlayback` has enough tiles to actually show its
+ * layout -- a 2-3 item card never exercises the "closing tile spans full
+ * width" branch of `isFeaturedItem`. Only the first item or two per location
+ * still lines up with `FIXTURE_CHAT_RESPONSE`'s citation ids; the rest are
+ * additional, uncited items invented purely to fill out the grid for visual
+ * review, matching this file's own rule against inventing anything that
+ * *looks* like real intelligence reporting -- it stays mundane, publicly-
+ * reported-looking material.
  *
  * This is the concrete case the plan's blocking dependency (§10) describes:
  * the real backend has these dates on a timeline with no coordinates, and
- * coordinates on a country centroid with no time. Nothing here is going to
- * arrive from a live response until that is fixed, so it is invented in full
- * -- coordinates included -- to demonstrate the frontend half of the feature
- * now rather than waiting on that backend change.
+ * coordinates on a country centroid with no time -- and, per the same
+ * section, no notion of "which items were found at which place" at all.
+ * Nothing here is going to arrive from a live response until that is fixed,
+ * so it is invented in full -- coordinates and item groupings included -- to
+ * demonstrate the frontend half of the feature now rather than waiting on
+ * that backend change.
  */
-export const FIXTURE_CHAT_MAP_EVENTS: readonly ChatMapEvent[] = [
+export const FIXTURE_CHAT_MAP_LOCATIONS: readonly ChatMapLocation[] = [
   {
-    id: "1",
+    id: "loc-amritsar",
     lat: 31.634,
     lng: 74.8723,
-    timestamp: "2026-08-23T05:00:00Z",
     label: "Amritsar, Punjab",
-    description: "Heavy rainfall warning issued for the northern rail corridor.",
-    sourceUrl: "https://example.org/1",
     severity: "warning",
+    items: [
+      {
+        id: "1",
+        kind: "news",
+        title: "Heavy rainfall warning issued for the northern rail corridor",
+        snippet: "Regional meteorological office flagged sustained heavy rainfall through the weekend.",
+        sourceUrl: "https://example.org/1",
+        timestamp: "2026-08-23T05:00:00Z",
+      },
+      {
+        id: "1b",
+        kind: "social",
+        title: "Commuters report standing water near the Amritsar rail yard",
+        snippet: "Multiple posts from the same stretch of track over a two-hour window.",
+        sourceUrl: "https://example.org/1b",
+        timestamp: "2026-08-23T08:15:00Z",
+      },
+      {
+        id: "1c",
+        kind: "news",
+        title: "Municipal drainage crews deployed to the low-lying yard approach",
+        snippet: "Pumping equipment was moved in overnight ahead of the forecast second band of rain.",
+        sourceUrl: "https://example.org/1c",
+        timestamp: "2026-08-23T11:40:00Z",
+      },
+      {
+        id: "1d",
+        kind: "social",
+        title: "Local transit account posts a platform closure notice",
+        snippet: "Two platforms closed as a precaution; the rest of the station stayed open.",
+        sourceUrl: "https://example.org/1d",
+        timestamp: "2026-08-23T13:05:00Z",
+      },
+      {
+        id: "1e",
+        kind: "news",
+        title: "District administration opens a helpline for delayed freight bookings",
+        sourceUrl: "https://example.org/1e",
+        timestamp: "2026-08-23T16:20:00Z",
+      },
+    ],
   },
   {
-    id: "2",
+    id: "loc-ambala",
     lat: 30.3752,
     lng: 76.7821,
-    timestamp: "2026-08-24T07:30:00Z",
     label: "Ambala, Haryana",
-    description: "Track inspection begins along the affected stretch.",
-    sourceUrl: "https://example.org/2",
     severity: "warning",
+    items: [
+      {
+        id: "2",
+        kind: "news",
+        title: "Track inspection begins along the affected stretch",
+        snippet: "Inspection teams were dispatched following the rainfall warning.",
+        sourceUrl: "https://example.org/2",
+        timestamp: "2026-08-24T07:30:00Z",
+      },
+      {
+        id: "2b",
+        kind: "social",
+        title: "Photos circulating of inspection crews at the Ambala junction",
+        sourceUrl: "https://example.org/2b",
+        timestamp: "2026-08-24T09:00:00Z",
+      },
+      {
+        id: "2c",
+        kind: "news",
+        title: "Junction signal maintenance extended by a further six hours",
+        snippet: "Engineers cited standing water near the signal relay hut as the cause of the delay.",
+        sourceUrl: "https://example.org/2c",
+        timestamp: "2026-08-24T12:10:00Z",
+      },
+      {
+        id: "2d",
+        kind: "social",
+        title: "Passengers describe a lengthy wait on a stalled express service",
+        snippet: "Several posts from the same train report over an hour stopped short of the platform.",
+        sourceUrl: "https://example.org/2d",
+        timestamp: "2026-08-24T15:45:00Z",
+      },
+    ],
   },
   {
-    id: "3",
+    id: "loc-delhi",
     lat: 28.6139,
     lng: 77.209,
-    timestamp: "2026-08-25T04:00:00Z",
     label: "New Delhi",
-    description: "Freight services suspended pending further inspection.",
-    sourceUrl: "https://example.org/3",
     severity: "critical",
+    items: [
+      {
+        id: "3",
+        kind: "news",
+        title: "Freight services suspended pending further inspection",
+        snippet: "Diversions are in place while water levels are monitored.",
+        sourceUrl: "https://example.org/3",
+        timestamp: "2026-08-25T04:00:00Z",
+      },
+      {
+        id: "3b",
+        kind: "social",
+        title: "Freight operators' association acknowledges the suspension",
+        sourceUrl: "https://example.org/3b",
+        timestamp: "2026-08-25T05:20:00Z",
+      },
+      {
+        id: "3c",
+        kind: "news",
+        title: "No restoration timeline published as of Tuesday evening",
+        sourceUrl: "https://example.org/3c",
+        timestamp: "2026-08-25T14:00:00Z",
+      },
+      {
+        id: "3d",
+        kind: "social",
+        title: "Warehouse operators near the freight yard report a growing backlog",
+        snippet: "Several accounts describe container storage nearing capacity by midday.",
+        sourceUrl: "https://example.org/3d",
+        timestamp: "2026-08-25T16:30:00Z",
+      },
+      {
+        id: "3e",
+        kind: "news",
+        title: "Ministry statement expected Wednesday on a revised restoration plan",
+        snippet: "An official said a schedule would be published once inspection reports are finalized.",
+        sourceUrl: "https://example.org/3e",
+        timestamp: "2026-08-25T19:10:00Z",
+      },
+    ],
   },
 ];

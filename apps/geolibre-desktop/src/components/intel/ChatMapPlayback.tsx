@@ -4,14 +4,26 @@ import * as maplibregl from "maplibre-gl";
 import type { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
 import { type RefObject, useEffect, useRef } from "react";
 import {
-  setChatMapActiveIndex,
+  toggleLocationExpanded,
   useChatMapSequence,
+  type ChatMapSequenceState,
 } from "../../lib/intel/chat-map-sequence";
-import type { ChatMapEvent, EventSeverity } from "../../lib/intel/map-events-contract";
+import type {
+  ChatMapLocation,
+  ChatMediaItem,
+  EventSeverity,
+} from "../../lib/intel/map-events-contract";
 
 const PATH_SOURCE_ID = "__geoint_chat_events_path";
 const PATH_LAYER_ID = "__geoint_chat_events_path_line";
-const PATH_DRAW_MS = 900;
+// The camera's flight duration -- see `animatePathGrowth`'s docstring for why
+// the line no longer runs its own timer at all, rather than one tuned to
+// match this: it reads the camera's live position every frame, so the line's
+// speed *is* the camera's speed, whatever this value is. A too-short value
+// (650ms, tried earlier) reads as an abrupt dart rather than a deliberate
+// flight, especially once IntelChatPanel's MAP_TIMING dwell was also brought
+// down closer to it -- see that constant's docstring for the pairing.
+const CAMERA_FLY_MS = 1100;
 
 /**
  * A chat event's severity (`info`/`warning`/`critical`, per the plan's draft
@@ -32,18 +44,19 @@ function eventSeverityText(severity: EventSeverity | undefined): string {
 }
 
 /**
- * Animates the map through the analyst chat's current event sequence:
+ * Animates the map through the analyst chat's location sequence
+ * (`chat-map-sequence.ts`):
  *
- * - A small severity-coloured **dot** at every revealed event's coordinate.
- * - A **card** floating above each revealed event's dot -- the current one
- *   expanded (label, time, description, source link), earlier ones shrunk to
- *   a compact clickable chip, so the map fills in with the story's evidence
- *   as it goes rather than only ever showing one card at a time.
- * - A **path** that animates drawing from the previous point to the new one
- *   each time the sequence advances, rather than snapping into place.
- * - Both the dot and the card are clickable: clicking an earlier step jumps
- *   the sequence back to it (`setChatMapActiveIndex`), replaying its camera
- *   move and re-expanding its card.
+ * - A small severity-coloured **dot** at every revealed location.
+ * - A **card** floating above each revealed location's dot. While a location
+ *   is the active one and still `revealing`, its card is a stack of its items
+ *   fading in one at a time; once `merging`/passed/in `overview`, the stack
+ *   collapses to a single clickable badge; clicking a badge expands it back
+ *   to the full item list (`toggleLocationExpanded`), in or out of overview.
+ * - A **path** that animates drawing from the previous location to the new
+ *   one each time the sequence advances, rather than snapping into place.
+ * - Once every location has been visited (`phase === "overview"`), the camera
+ *   eases out to fit all of them in view.
  *
  * Non-visual (returns null): every visible thing here is either a
  * `maplibregl.Marker` DOM element or a GeoJSON layer, added directly to the
@@ -53,100 +66,143 @@ function eventSeverityText(severity: EventSeverity | undefined): string {
  * card anchored to a coordinate stays correctly placed without this component
  * having to listen for camera moves and recompute a screen position itself.
  *
- * Two different mechanisms for the two moving parts:
- *
- * - **Dots and cards** are plain DOM, styled with the app's own
- *   `intel-sev-*`/`geoint-pulse`/`map-glass` Tailwind utilities (ordinary CSS)
- *   rather than a MapLibre style-spec layer, which cannot reference a CSS
- *   custom property for its colours.
- * - The **path** genuinely is a GeoJSON line layer -- animating a hand-drawn
- *   polyline of DOM elements would be reinventing what MapLibre already does
- *   well. Its one MapLibre-owned colour, `line-color`, is resolved once from
- *   `--primary` into a literal `hsl(...)` the same way `chart-export.ts`
- *   resolves theme colours for its own non-DOM (SVG) rendering context.
+ * Markers are rebuilt only when the sequence state actually changes; the path
+ * *source*'s existence is re-asserted separately on every `styledata` event
+ * (cheap and idempotent) because a basemap switch reloads the style and wipes
+ * it, but markers are plain DOM tracked by the map instance, not the style, so
+ * they need no such re-assertion -- attaching the marker rebuild to
+ * `styledata` too (the previous version's bug) reran it on every tile load,
+ * which is a large part of what made the panel feel laggy.
  */
 export function ChatMapPlayback({
   mapControllerRef,
 }: {
   mapControllerRef: RefObject<MapController | null>;
 }): null {
-  const { events, activeIndex } = useChatMapSequence();
+  const sequence = useChatMapSequence();
+  const { locations, activeLocationIndex, phase } = sequence;
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   // The step the path has actually finished drawing to, so a later effect run
   // can tell "advanced by one" (worth an animated draw) from "jumped to a
-  // different step" (snap instead -- an animated redraw backwards or across a
-  // skip would look like the sequence rewinding, not like progress).
+  // different step" (snap instead).
   const drawnIndexRef = useRef(-1);
-  // Cancels whichever path-draw animation is currently in flight, so clicking
-  // a new step before the previous draw finishes can't leave two animations
-  // fighting over the same GeoJSON source.
   const cancelDrawRef = useRef(() => {});
 
+  // Rebuild markers when the sequence state changes. Deliberately not on
+  // `styledata` -- see the module docstring. Depends on the whole `sequence`
+  // snapshot (a new object on every store change, see chat-map-sequence.ts's
+  // `set`) rather than its individual fields, since `renderMarkers` reads all
+  // of them.
   useEffect(() => {
     const map = mapControllerRef.current?.getMap() ?? null;
     if (!map) return;
-    const render = () =>
-      safely(() => renderMarkers(map, events, activeIndex, markersRef.current));
-    render();
-    // A basemap switch reloads the style and wipes the path source/layer, so
-    // re-create it once the new style is in place. Markers are plain DOM and
-    // survive a style reload untouched, but re-running is harmless for them.
-    map.on("styledata", render);
-    return () => {
-      map.off("styledata", render);
-    };
-  }, [mapControllerRef, events, activeIndex]);
+    safely(() => renderMarkers(map, sequence, markersRef.current));
+  }, [mapControllerRef, sequence]);
 
-  // Draw (or snap) the path to the active step, separately from the marker
-  // effect above so the two can reason about "advanced by one" independently
-  // of whatever triggers a marker re-render.
+  // Re-assert the path layer exists on every style reload (a basemap switch
+  // wipes it); re-creating it is a no-op when it is already there.
+  useEffect(() => {
+    const map = mapControllerRef.current?.getMap() ?? null;
+    if (!map) return;
+    const ensure = () => safely(() => ensurePathLayer(map));
+    ensure();
+    map.on("styledata", ensure);
+    return () => {
+      map.off("styledata", ensure);
+    };
+  }, [mapControllerRef]);
+
+  // Draw (or snap) the path to the active location, separately from the
+  // marker effect so the two can reason about "advanced by one" independently
+  // of whatever triggers a marker re-render (e.g. an item revealing).
   useEffect(() => {
     const map = mapControllerRef.current?.getMap() ?? null;
     if (!map || !map.isStyleLoaded()) return;
     cancelDrawRef.current();
     const from = drawnIndexRef.current;
-    drawnIndexRef.current = activeIndex;
-    if (activeIndex === from + 1) {
-      cancelDrawRef.current = animatePathGrowth(map, events, from, activeIndex);
+    drawnIndexRef.current = activeLocationIndex;
+    if (activeLocationIndex === from + 1) {
+      cancelDrawRef.current = animatePathGrowth(map, locations, from, activeLocationIndex);
     } else {
       safely(() => {
         ensurePathLayer(map);
         (map.getSource(PATH_SOURCE_ID) as GeoJSONSource | undefined)?.setData(
-          pathCollection(events, activeIndex),
+          pathCollection(locations, activeLocationIndex),
         );
       });
     }
-  }, [mapControllerRef, events, activeIndex]);
+  }, [mapControllerRef, locations, activeLocationIndex]);
 
-  // Fly the camera to the active event. Separate from the effects above so a
-  // re-render that only touches markers or the path never re-triggers a
-  // camera move.
+  // Fly the camera to the active location while still working through the
+  // sequence; once every location is visited, ease out to fit all of them.
   useEffect(() => {
-    if (activeIndex < 0) return;
-    const event = events[activeIndex];
-    if (!event) return;
-    mapControllerRef.current?.flyTo({
-      center: [event.lng, event.lat],
+    const controller = mapControllerRef.current;
+    if (!controller) return;
+    if (phase === "overview") {
+      if (locations.length === 0) return;
+      const map = controller.getMap();
+      if (!map) return;
+      const bounds = new maplibregl.LngLatBounds();
+      for (const location of locations) bounds.extend([location.lng, location.lat]);
+      safely(() => map.fitBounds(bounds, { padding: 72, duration: 1200, maxZoom: 9 }));
+      return;
+    }
+    if (activeLocationIndex < 0) return;
+    const location = locations[activeLocationIndex];
+    if (!location) return;
+    const map = controller.getMap();
+    controller.flyTo({
+      center: [location.lng, location.lat],
       zoom: 7,
-      duration: 1400,
+      duration: CAMERA_FLY_MS,
+      offset: map ? cardHeadroomOffset(map) : undefined,
     });
-  }, [mapControllerRef, events, activeIndex]);
+  }, [mapControllerRef, locations, activeLocationIndex, phase]);
 
-  // Remove everything on unmount -- the sequence usually ends by sitting on
-  // the last event rather than clearing itself (see IntelChatPanel), so this
-  // is what actually guarantees the source/layer/markers do not outlive a
+  // Remove everything on unmount -- the sequence usually ends by sitting in
+  // the overview rather than clearing itself (see IntelChatPanel), so this is
+  // what actually guarantees the source/layer/markers do not outlive a
   // console reload.
   useEffect(
     () => () => safely(() => clearAll(mapControllerRef.current?.getMap() ?? null, markersRef.current)),
     [mapControllerRef],
   );
-  // Separate effect (rather than folded into the one above) purely so the
-  // draw-cancellation and the marker teardown are two independent concerns,
-  // matching how RemoteCursorsOverlay keeps its own single teardown effect to
-  // one job.
   useEffect(() => () => cancelDrawRef.current(), []);
 
   return null;
+}
+
+/**
+ * How far below the map container's true vertical center the camera should
+ * land a location, in screen pixels, so its card -- anchored *above* the
+ * marker (see `renderMarkers`) -- has headroom to grow into instead of
+ * clipping off the top of the viewport. A location's card can run to several
+ * hundred pixels tall with a full bento grid of items, and centering the
+ * marker (the previous behaviour) gave it at most half the container's
+ * height to work with regardless of how tall the card actually was.
+ *
+ * A fraction of the *live* container height rather than a fixed pixel count,
+ * so it scales down gracefully on a short/split map panel instead of pushing
+ * the marker below the visible area there. Capped so it stops growing once
+ * the container is tall enough that centering was never the problem.
+ */
+function cardHeadroomOffset(map: MapLibreMap): [number, number] {
+  const containerHeight = map.getContainer().clientHeight;
+  return [0, Math.min(170, containerHeight * 0.22)];
+}
+
+/**
+ * The geographic point currently sitting at the screen pixel a `flyTo` using
+ * {@link cardHeadroomOffset} will ultimately center its destination on. Used
+ * by `animatePathGrowth` to track the flight's actual progress -- see that
+ * function's docstring for why this, and not `map.getCenter()`, is the right
+ * thing to read once the camera's own flyTo carries the same offset.
+ */
+function effectiveFlightTarget(map: MapLibreMap): [number, number] {
+  const [, offsetY] = cardHeadroomOffset(map);
+  const container = map.getContainer();
+  const { lng, lat } = map.unproject([container.clientWidth / 2, container.clientHeight / 2 + offsetY]);
+  return [lng, lat];
 }
 
 function safely(fn: () => void): void {
@@ -179,9 +235,8 @@ function ensurePathLayer(map: MapLibreMap): void {
       source: PATH_SOURCE_ID,
       paint: {
         "line-color": resolvedHsl("--primary"),
-        "line-width": 2,
-        "line-dasharray": [0.2, 1.6],
-        "line-opacity": 0.85,
+        "line-width": 3,
+        "line-opacity": 0.9,
       },
     });
   }
@@ -203,82 +258,112 @@ function lineFeatureCollection(coordinates: [number, number][]) {
   };
 }
 
-function pathCollection(events: readonly ChatMapEvent[], upToIndex: number) {
-  const visited = events.slice(0, Math.max(0, upToIndex + 1));
-  return lineFeatureCollection(visited.map((event) => [event.lng, event.lat]));
-}
-
-function lerp(a: [number, number], b: [number, number], t: number): [number, number] {
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+function pathCollection(locations: readonly ChatMapLocation[], upToIndex: number) {
+  const visited = locations.slice(0, Math.max(0, upToIndex + 1));
+  return lineFeatureCollection(visited.map((location) => [location.lng, location.lat]));
 }
 
 /**
- * Animates the path from `fromIndex` (the last step it was already drawn to,
- * -1 if nothing yet) to `toIndex`, sliding the newest segment's endpoint from
- * the previous point to the new one over `PATH_DRAW_MS` rather than snapping.
+ * Grows the path from `fromIndex` (the last step it was already drawn to, -1
+ * if nothing yet) to `toIndex`, by anchoring the newest segment's leading
+ * endpoint to the point the camera is actually converging on every `move`
+ * event, rather than animating it on an independent timer.
+ *
+ * An earlier version drove this with its own `requestAnimationFrame` loop and
+ * duration/easing tuned to *match* `flyTo`'s -- but `flyTo` does not ease
+ * linearly between two points: it follows MapLibre's own curved
+ * pan-then-zoom flight path (Van Wijk's algorithm), and even a
+ * duration-matched, identically-eased independent timer traces a different
+ * curve through space, so the line either raced ahead of or lagged behind
+ * what was on screen. Reading the camera's live position on every `move`
+ * event instead draws the line through the exact point the camera is
+ * *actually* at each frame, which is the only way the two cannot drift apart
+ * -- they render one pixel from the same source of truth for as long as the
+ * flight lasts.
+ *
+ * That "live position" is `effectiveFlightTarget`, not the simpler
+ * `map.getCenter()`: the camera's flyTo carries the same headroom offset
+ * `cardHeadroomOffset` gives its own flyTo call (see the camera effect), so
+ * `getCenter()` converges on a point *offset* from the destination location,
+ * not the location itself. Tracking the offset-adjusted point instead means
+ * the line's tip already arrives exactly at `to` by the time the flight
+ * actually ends, rather than needing a final corrective jump on `moveend` --
+ * `moveend` below still snaps to `to` as a floating-point-drift cleanup, not
+ * because there is a real gap left to close.
+ *
  * Straight-line interpolation, not great-circle or road-snapped -- correct for
  * "connect these two report locations," wrong for "trace an actual route,"
  * per UI_REPURPOSE_PLAN.md §10's guidance on adapting the route-animation
  * primitives for this case.
  *
- * Returns a canceller; call it to stop the animation early (e.g. because a new
- * step arrived before this one finished drawing).
+ * Returns a canceller; call it to stop early (e.g. a new step arrived before
+ * this one finished drawing) without leaking the map listeners.
  */
 function animatePathGrowth(
   map: MapLibreMap,
-  events: readonly ChatMapEvent[],
+  locations: readonly ChatMapLocation[],
   fromIndex: number,
   toIndex: number,
 ): () => void {
   ensurePathLayer(map);
   const getSource = () => map.getSource(PATH_SOURCE_ID) as GeoJSONSource | undefined;
-  const base: [number, number][] = events
+  const base: [number, number][] = locations
     .slice(0, Math.max(0, fromIndex + 1))
-    .map((event) => [event.lng, event.lat]);
-  const target = events[toIndex];
-  if (!target) return () => {};
-  const to: [number, number] = [target.lng, target.lat];
-  const from = base[base.length - 1];
-  if (!from) {
-    // Nothing to draw from yet (this is the sequence's first point) -- there
-    // is no segment to animate, only a single point with no line.
+    .map((location) => [location.lng, location.lat]);
+  const target = locations[toIndex];
+  if (!target || base.length === 0) {
+    // No prior point to draw from yet (this is the sequence's first point) --
+    // there is no segment to animate, only a single point with no line.
     safely(() => getSource()?.setData(lineFeatureCollection([])));
     return () => {};
   }
+  const to: [number, number] = [target.lng, target.lat];
 
-  let cancelled = false;
-  const startedAt = performance.now();
-  const tick = () => {
-    if (cancelled) return;
-    const t = Math.min(1, (performance.now() - startedAt) / PATH_DRAW_MS);
-    safely(() => getSource()?.setData(lineFeatureCollection([...base, lerp(from, to, t)])));
-    if (t < 1) requestAnimationFrame(tick);
+  const detach = () => {
+    map.off("move", onMove);
+    map.off("moveend", onMoveEnd);
   };
-  requestAnimationFrame(tick);
-  return () => {
-    cancelled = true;
+  const onMove = () => {
+    const point = effectiveFlightTarget(map);
+    safely(() => getSource()?.setData(lineFeatureCollection([...base, point])));
   };
+  const onMoveEnd = () => {
+    safely(() => getSource()?.setData(lineFeatureCollection([...base, to])));
+    detach();
+  };
+  map.on("move", onMove);
+  map.on("moveend", onMoveEnd);
+  onMove();
+  return detach;
 }
 
-type MarkerState = "pending" | "current" | "visited";
+/** Whether a location's card is still fading in its items, or already merged. */
+type CardMode = "revealing" | "merged";
+
+function cardModeFor(index: number, sequence: ChatMapSequenceState): CardMode | null {
+  const { activeLocationIndex, phase } = sequence;
+  if (phase === "overview") return "merged";
+  if (index > activeLocationIndex) return null; // not revealed yet
+  if (index < activeLocationIndex) return "merged"; // already passed
+  return phase === "revealing" ? "revealing" : "merged"; // the active one
+}
 
 /**
- * Rebuild the dot and card markers to match `events`/`activeIndex`. Unvisited
- * events get only a small dim dot (so the user can see there is more to
- * come); visited ones get a solid severity-coloured dot plus a compact,
- * clickable card; the current one gets a larger pulsing dot plus its card
- * expanded to full detail.
+ * Rebuild the dot and card markers to match the current sequence state.
+ * Unvisited locations get only a small dim dot (so the user can see there is
+ * more to come); the active one gets a larger pulsing dot; passed/merged
+ * locations get a solid severity-coloured dot.
  */
 function renderMarkers(
   map: MapLibreMap,
-  events: readonly ChatMapEvent[],
-  activeIndex: number,
+  sequence: ChatMapSequenceState,
   markers: Map<string, maplibregl.Marker>,
 ): void {
+  const { locations } = sequence;
   const liveKeys = new Set<string>();
-  events.forEach((event, index) => {
-    liveKeys.add(dotKey(event.id));
-    if (index <= activeIndex) liveKeys.add(cardKey(event.id));
+  locations.forEach((location, index) => {
+    liveKeys.add(dotKey(location.id));
+    if (cardModeFor(index, sequence) !== null) liveKeys.add(cardKey(location.id));
   });
   for (const [key, marker] of markers) {
     if (!liveKeys.has(key)) {
@@ -287,36 +372,38 @@ function renderMarkers(
     }
   }
 
-  const onSelect = (index: number) => setChatMapActiveIndex(index);
+  locations.forEach((location, index) => {
+    const mode = cardModeFor(index, sequence);
+    const dotState: DotState =
+      sequence.phase !== "overview" && index === sequence.activeLocationIndex
+        ? "current"
+        : mode !== null
+          ? "visited"
+          : "pending";
+    const lngLat: [number, number] = [location.lng, location.lat];
 
-  events.forEach((event, index) => {
-    const state: MarkerState =
-      index === activeIndex ? "current" : index < activeIndex ? "visited" : "pending";
-    const lngLat: [number, number] = [event.lng, event.lat];
-
-    let dot = markers.get(dotKey(event.id));
+    let dot = markers.get(dotKey(location.id));
     if (!dot) {
-      const el = createDotElement(event, state, () => onSelect(index));
-      dot = new maplibregl.Marker({ element: el }).setLngLat(lngLat).addTo(map);
-      markers.set(dotKey(event.id), dot);
-    } else {
-      dot.setLngLat(lngLat);
-      applyDotState(dot.getElement(), event, state);
-    }
-
-    if (index > activeIndex) return; // not revealed yet -- no card
-    let card = markers.get(cardKey(event.id));
-    const total = events.length;
-    if (!card) {
-      const el = createCardElement(event, state, index, total, () => onSelect(index));
-      card = new maplibregl.Marker({ element: el, anchor: "bottom", offset: [0, -14] })
+      dot = new maplibregl.Marker({ element: createDotElement(location, dotState) })
         .setLngLat(lngLat)
         .addTo(map);
-      markers.set(cardKey(event.id), card);
+      markers.set(dotKey(location.id), dot);
+    } else {
+      dot.setLngLat(lngLat);
+      applyDotState(dotInner(dot.getElement()), location, dotState);
+    }
+
+    if (mode === null) return;
+    let card = markers.get(cardKey(location.id));
+    if (!card) {
+      card = new maplibregl.Marker({ element: createCardElement(), anchor: "bottom", offset: [0, -14] })
+        .setLngLat(lngLat)
+        .addTo(map);
+      markers.set(cardKey(location.id), card);
     } else {
       card.setLngLat(lngLat);
-      applyCardState(card.getElement(), event, state, index, total);
     }
+    applyCardState(cardInner(card.getElement()), location, mode, sequence);
   });
 }
 
@@ -328,160 +415,278 @@ function cardKey(id: string): string {
   return `card:${id}`;
 }
 
-function createDotElement(
-  event: ChatMapEvent,
-  state: MarkerState,
-  onClick: () => void,
-): HTMLDivElement {
-  const el = document.createElement("div");
-  el.className = "cursor-pointer";
-  el.addEventListener("click", (e) => {
-    e.stopPropagation();
-    onClick();
-  });
-  applyDotState(el, event, state);
-  return el;
+type DotState = "pending" | "current" | "visited";
+
+/**
+ * The element passed to `new maplibregl.Marker({element})` gets its
+ * `maplibregl-marker` positioning class added once by MapLibre's own
+ * constructor, and MapLibre keeps toggling other classes on it
+ * (`maplibregl-marker-covered`, `-draggable`) for as long as it lives. Style
+ * functions must never do `el.className = ...` on *that* root -- doing so
+ * silently wipes MapLibre's own class and the marker falls out of position,
+ * which is what made revealed items appear not to show up at all. So the root
+ * here is a bare wrapper touched only once, at creation, and every restyle
+ * targets its one child instead -- the same split `CommentMapOverlay` uses for
+ * its own pins.
+ */
+function createDotElement(location: ChatMapLocation, state: DotState): HTMLDivElement {
+  const root = document.createElement("div");
+  const inner = document.createElement("div");
+  root.appendChild(inner);
+  applyDotState(inner, location, state);
+  return root;
 }
 
-function applyDotState(el: HTMLElement, event: ChatMapEvent, state: MarkerState): void {
+function dotInner(root: HTMLElement): HTMLElement {
+  return root.firstElementChild as HTMLElement;
+}
+
+function applyDotState(el: HTMLElement, location: ChatMapLocation, state: DotState): void {
   const size = state === "current" ? 16 : 10;
   // `severityText` (a solid `color`) plus `bg-current` -- the same pairing
   // `S2MetricsPanel`'s severity bar uses -- so the dot renders as a solid
   // filled colour rather than the translucent wash `severityBg` is tuned for.
   el.className = cn(
-    "cursor-pointer rounded-full border-2 border-background bg-current transition-transform hover:scale-125",
-    state === "pending" ? "text-muted-foreground/60" : eventSeverityText(event.severity),
-    state === "current" && "geoint-pulse",
+    "rounded-full border-2 border-background bg-current transition-transform",
+    state === "pending" ? "text-muted-foreground/60" : eventSeverityText(location.severity),
+    state === "current" && "geoint-pulse ring-4 ring-current/25",
   );
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
 }
 
-/**
- * The floating card above a revealed event's dot: expanded detail for the
- * current step, a compact clickable chip for earlier ones. Built with DOM
- * APIs -- `textContent`, never string-interpolated markup -- because this
- * text (label/description) is meant to originate from retrieved news/social
- * content once a real backend lands, and that is untrusted input; the same
- * defense-in-depth precedent `CommentMapOverlay` follows for its own
- * user-supplied pin content.
- */
-function createCardElement(
-  event: ChatMapEvent,
-  state: MarkerState,
-  index: number,
-  total: number,
-  onClick: () => void,
-): HTMLDivElement {
-  const el = document.createElement("div");
-  el.addEventListener("click", (e) => {
-    e.stopPropagation();
-    onClick();
-  });
-  applyCardState(el, event, state, index, total);
-  return el;
+/** Bare marker root plus the one child every card style function targets -- see `createDotElement`'s docstring for why the root itself must never be restyled. */
+function createCardElement(): HTMLDivElement {
+  const root = document.createElement("div");
+  root.appendChild(document.createElement("div"));
+  return root;
 }
 
+function cardInner(root: HTMLElement): HTMLElement {
+  return root.firstElementChild as HTMLElement;
+}
+
+/**
+ * Applies the right content for the card's current mode, rebuilding the DOM
+ * only when the *mode itself* changes (tracked via `dataset.cardMode`), never
+ * on every render. Within `"revealing"` mode, already-shown items are never
+ * touched -- `syncRevealingStack` only appends the newly revealed one -- so an
+ * item's fade-in plays once and does not replay every time a sibling item
+ * joins it, which is what made the previous version feel jumpy.
+ */
 function applyCardState(
   el: HTMLElement,
-  event: ChatMapEvent,
-  state: MarkerState,
-  index: number,
-  total: number,
+  location: ChatMapLocation,
+  mode: CardMode,
+  sequence: ChatMapSequenceState,
 ): void {
-  el.replaceChildren();
-  if (state === "current") {
-    renderExpandedCard(el, event, index, total);
-  } else {
-    renderCompactChip(el, event);
+  const expanded = mode === "merged" && sequence.expandedLocationIds.has(location.id);
+  const key = mode === "revealing" ? "revealing" : expanded ? "expanded" : "merged";
+  if (el.dataset.cardMode !== key) {
+    el.replaceChildren();
+    el.dataset.cardMode = key;
+    if (key === "revealing") initRevealingStack(el, location);
+    else if (key === "expanded") renderExpandedList(el, location);
+    else renderMergedBadge(el, location);
   }
+  if (key === "revealing") syncRevealingStack(el, location, sequence.revealedItemCount);
 }
 
-function renderExpandedCard(el: HTMLElement, event: ChatMapEvent, index: number, total: number): void {
-  el.className =
-    "geoint-fade-in intel-hairline map-glass w-64 cursor-pointer rounded-lg border p-2.5 shadow-lg motion-reduce:animate-none";
-
-  const header = document.createElement("div");
-  header.className = "flex items-start gap-2";
-
-  const dot = document.createElement("span");
-  dot.setAttribute("aria-hidden", "true");
-  dot.className = cn("mt-1 h-2 w-2 shrink-0 rounded-full bg-current", eventSeverityText(event.severity));
-  header.appendChild(dot);
-
-  const titleBlock = document.createElement("div");
-  titleBlock.className = "min-w-0 flex-1";
-  const label = document.createElement("p");
-  label.className = "text-xs font-semibold leading-snug text-foreground";
-  label.textContent = event.label;
-  const time = document.createElement("time");
-  time.className = "intel-numeral block text-[10px] text-muted-foreground";
-  time.dateTime = event.timestamp;
-  time.textContent = formatEventTime(event.timestamp);
-  titleBlock.append(label, time);
-  header.appendChild(titleBlock);
-
-  const step = document.createElement("span");
-  step.className = "intel-numeral shrink-0 text-[10px] text-muted-foreground";
-  step.textContent = `${index + 1} / ${total}`;
-  header.appendChild(step);
-  el.appendChild(header);
-
-  if (event.description) {
-    const description = document.createElement("p");
-    description.className = "mt-1.5 text-[11px] leading-relaxed text-foreground/90";
-    description.textContent = event.description;
-    el.appendChild(description);
-  }
-
-  if (event.sourceUrl) {
-    const link = document.createElement("a");
-    link.href = event.sourceUrl;
-    link.target = "_blank";
-    // `noreferrer` alongside `noopener`: this is a third-party source, so the
-    // destination should not receive this console's URL.
-    link.rel = "noopener noreferrer";
-    link.className = "mt-1.5 flex items-center gap-1 text-[10px] text-primary hover:underline";
-    link.textContent = "Source ↗";
-    link.addEventListener("click", (e) => e.stopPropagation());
-    el.appendChild(link);
-  }
-}
-
-function renderCompactChip(el: HTMLElement, event: ChatMapEvent): void {
+function initRevealingStack(el: HTMLElement, location: ChatMapLocation): void {
   el.className = cn(
-    "intel-hairline map-glass flex max-w-40 cursor-pointer items-center gap-1.5 rounded-full border px-2 py-1 shadow transition-transform hover:scale-105",
+    "geoint-fade-in map-glass max-h-[480px] w-[380px] overflow-y-auto rounded-xl border border-l-[3px] border-current/35 p-3 shadow-lg motion-reduce:animate-none",
+    eventSeverityText(location.severity),
   );
 
+  const header = document.createElement("div");
+  header.className = "intel-hairline flex items-center gap-2 border-b pb-2";
   const dot = document.createElement("span");
   dot.setAttribute("aria-hidden", "true");
   dot.className = cn(
-    "h-1.5 w-1.5 shrink-0 rounded-full bg-current",
-    eventSeverityText(event.severity),
+    "h-2.5 w-2.5 shrink-0 rounded-full bg-current ring-4 ring-current/20",
+    eventSeverityText(location.severity),
   );
+  const label = document.createElement("p");
+  label.className = "min-w-0 flex-1 truncate text-sm font-semibold text-foreground";
+  label.textContent = location.label;
+  header.append(dot, label);
+  el.appendChild(header);
+
+  const list = document.createElement("div");
+  list.className = "mt-2.5 grid grid-cols-2 gap-2";
+  list.dataset.role = "item-list";
+  el.appendChild(list);
+}
+
+function syncRevealingStack(el: HTMLElement, location: ChatMapLocation, revealedItemCount: number): void {
+  const list = el.querySelector<HTMLElement>('[data-role="item-list"]');
+  if (!list) return;
+  while (list.children.length < revealedItemCount) {
+    const index = list.children.length;
+    list.appendChild(createItemRow(location.items[index], index, location.items.length));
+  }
+  while (list.children.length > revealedItemCount) {
+    list.lastElementChild?.remove();
+  }
+}
+
+/**
+ * Whether an item's tile spans the full width of its bento grid rather than
+ * sharing a row with a neighbour: the first item is always the "headline"
+ * tile, and the last item spans too whenever the remaining, non-headline
+ * items are an odd count -- otherwise that last tile would sit alone next to
+ * an empty grid cell. Deliberately based on the location's *final* item
+ * count, not how many are revealed so far, so a tile's span is decided the
+ * moment it is created and never has to reflow as its siblings fade in.
+ */
+function isFeaturedItem(index: number, total: number): boolean {
+  if (index === 0) return true;
+  return index === total - 1 && total % 2 === 0;
+}
+
+/**
+ * One item's tile, built with DOM APIs -- `textContent`, never
+ * string-interpolated markup -- because this text (title/snippet) is meant to
+ * originate from retrieved news/social content once a real backend lands, and
+ * that is untrusted input; the same defense-in-depth precedent
+ * `CommentMapOverlay` follows for its own user-supplied pin content.
+ */
+function createItemRow(item: ChatMediaItem, index: number, total: number): HTMLDivElement {
+  const featured = isFeaturedItem(index, total);
+  const row = document.createElement("div");
+  row.className = cn(
+    "geoint-fade-in rounded-md border transition-all duration-150 hover:-translate-y-0.5 hover:shadow-sm motion-reduce:animate-none motion-reduce:hover:translate-y-0",
+    // The featured tile gets its own tinted border instead of `intel-hairline`
+    // -- overriding just one side of that utility's border-color is a
+    // cascade-order gamble (see index.css's own notes on why map-glass et al.
+    // are `@utility` in the first place), so it is simplest not to mix them.
+    featured
+      ? "col-span-2 border-primary/30 bg-primary/[0.06] p-3 hover:bg-primary/10"
+      : "intel-hairline bg-background/40 p-2.5 hover:bg-background/60",
+  );
+
+  const kindRow = document.createElement("div");
+  kindRow.className = "flex items-center justify-between gap-2";
+  const kind = document.createElement("span");
+  kind.className = cn(
+    "intel-label rounded-full px-1.5 py-0.5",
+    item.kind === "news" ? "bg-primary/15 text-primary" : "bg-accent/40 text-accent-foreground",
+  );
+  kind.textContent = item.kind === "news" ? "News" : "Social";
+  kindRow.appendChild(kind);
+
+  const time = document.createElement("span");
+  time.className = "intel-numeral text-[9px] text-muted-foreground";
+  time.textContent = new Date(item.timestamp).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  kindRow.appendChild(time);
+  row.appendChild(kindRow);
+
+  const title = document.createElement("p");
+  title.className = cn(
+    "mt-1 font-medium leading-snug text-foreground",
+    featured ? "text-[13px]" : "text-[11px]",
+  );
+  title.textContent = item.title;
+  row.appendChild(title);
+
+  if (item.snippet) {
+    const snippet = document.createElement("p");
+    snippet.className = cn(
+      "mt-1 leading-snug text-muted-foreground",
+      featured ? "text-[11px] line-clamp-2" : "text-[10px] line-clamp-1",
+    );
+    snippet.textContent = item.snippet;
+    row.appendChild(snippet);
+  }
+
+  if (item.sourceUrl) {
+    const link = document.createElement("a");
+    link.href = item.sourceUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.className =
+      "mt-1.5 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary transition-colors hover:bg-primary/20";
+    link.textContent = "Open source ↗";
+    link.addEventListener("click", (e) => e.stopPropagation());
+    row.appendChild(link);
+  }
+  return row;
+}
+
+/** The compact, clickable "N sources" badge a location settles into after its items merge. */
+function renderMergedBadge(el: HTMLElement, location: ChatMapLocation): void {
+  el.className = cn(
+    "geoint-fade-in intel-hairline map-glass flex max-w-48 cursor-pointer items-center gap-1.5 rounded-full border px-2 py-1 shadow-md transition-transform hover:scale-105 motion-reduce:animate-none",
+  );
+  el.setAttribute("role", "button");
+  el.setAttribute("aria-label", `${location.label}: ${location.items.length} sources, click to view`);
+  el.onclick = (e) => {
+    e.stopPropagation();
+    toggleLocationExpanded(location.id);
+  };
+
+  const dot = document.createElement("span");
+  dot.setAttribute("aria-hidden", "true");
+  dot.className = cn("h-1.5 w-1.5 shrink-0 rounded-full bg-current", eventSeverityText(location.severity));
   el.appendChild(dot);
 
   const label = document.createElement("span");
   label.className = "truncate text-[10px] font-medium text-foreground";
-  label.textContent = event.label;
+  label.textContent = location.label;
   el.appendChild(label);
+
+  const count = document.createElement("span");
+  count.className = "intel-numeral shrink-0 rounded-full bg-primary/15 px-1.5 text-[9px] font-semibold text-primary";
+  count.textContent = String(location.items.length);
+  el.appendChild(count);
 }
 
-/**
- * Date and time, unlike `EventFeedPanel`'s time-only formatter: that feed is a
- * recent window where the date is nearly always today, but a chat sequence's
- * events can span several different days (as this fixture's do), so the date
- * is the part that actually distinguishes one step from another.
- */
-function formatEventTime(iso: string): string {
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return iso;
-  return parsed.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+/** The full item list a merged badge expands into when clicked. */
+function renderExpandedList(el: HTMLElement, location: ChatMapLocation): void {
+  el.className = cn(
+    "geoint-fade-in map-glass max-h-[480px] w-[420px] cursor-default overflow-y-auto rounded-xl border border-l-[3px] border-current/35 p-3 shadow-lg motion-reduce:animate-none",
+    eventSeverityText(location.severity),
+  );
+
+  const header = document.createElement("div");
+  header.className = "intel-hairline flex items-center justify-between gap-2 border-b pb-2";
+  const labelRow = document.createElement("div");
+  labelRow.className = "flex min-w-0 flex-1 items-center gap-2";
+  const dot = document.createElement("span");
+  dot.setAttribute("aria-hidden", "true");
+  dot.className = cn(
+    "h-2.5 w-2.5 shrink-0 rounded-full bg-current ring-4 ring-current/20",
+    eventSeverityText(location.severity),
+  );
+  const label = document.createElement("p");
+  label.className = "min-w-0 flex-1 truncate text-sm font-semibold text-foreground";
+  label.textContent = location.label;
+  labelRow.append(dot, label);
+  header.appendChild(labelRow);
+
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className =
+    "intel-numeral shrink-0 rounded-full px-2 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground";
+  close.textContent = "Collapse";
+  close.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleLocationExpanded(location.id);
   });
+  header.appendChild(close);
+  el.appendChild(header);
+
+  const list = document.createElement("div");
+  list.className = "mt-2.5 grid grid-cols-2 gap-2";
+  location.items.forEach((item, index) => {
+    list.appendChild(createItemRow(item, index, location.items.length));
+  });
+  el.appendChild(list);
 }
 
 function clearAll(map: MapLibreMap | null, markers: Map<string, maplibregl.Marker>): void {

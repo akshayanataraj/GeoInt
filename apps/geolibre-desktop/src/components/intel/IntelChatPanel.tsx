@@ -16,10 +16,13 @@ import {
 import { sendChatMessage } from "../../lib/intel/client";
 import type { ChatResponse, Citation } from "../../lib/intel/contracts";
 import {
-  setChatMapActiveIndex,
+  advanceToLocation,
+  beginMerge,
+  finishToOverview,
+  revealNextItem,
   setChatMapSequence,
 } from "../../lib/intel/chat-map-sequence";
-import type { ChatMapEvent } from "../../lib/intel/map-events-contract";
+import type { ChatMapLocation } from "../../lib/intel/map-events-contract";
 import { AnswerText } from "./AnswerText";
 
 /**
@@ -48,18 +51,30 @@ import { AnswerText } from "./AnswerText";
  * resolves once with everything already in hand.
  *
  * What *is* implemented on top of that single round-trip is a client-side
- * *simulated* generation: once the fixture response lands, the answer text
- * reveals word by word and `ChatMapPlayback` flies the map through the
- * response's event sequence (see `chat-map-sequence.ts`), both driven off one
- * shared progress ramp so they finish together. This stands in for the real
- * tool-calling flow the plan drafted (`render_map_events`, UI_REPURPOSE_PLAN.md
- * §10): a model with native function-calling would call that tool mid-turn as
- * it resolves each event's coordinates, and the frontend executor would upsert
- * them into the map as they arrive. There is no such model in the loop here --
- * this chat is a plain fetch, not an agent loop, and GeoLibre's own tool-calling
- * machinery was removed with its AI Assistant -- so the reveal is played out
- * against the complete fixture response instead of real incremental tool
- * calls. The animation is genuine; the "generation" it is timed to is not.
+ * *simulated* generation, run as two independent timelines once the fixture
+ * response lands:
+ *
+ * - The answer text reveals word by word (throttled to actual word-count
+ *   changes, not every animation frame -- see `playTextReveal`).
+ * - `ChatMapPlayback` plays the location sequence: fly to a location, fade in
+ *   its items one at a time, merge them into one badge, fly to the next, and
+ *   once every location has been visited, zoom out to fit them all with every
+ *   badge clickable (see `chat-map-sequence.ts`'s `PlaybackPhase` and
+ *   `playMapSequence` below).
+ *
+ * The two run concurrently rather than off one shared progress number: the
+ * map's sequence is a genuine state machine (reveal → merge → next location →
+ * … → overview) with its own natural pacing, and forcing it to fit a single
+ * 0..1 ramp shared with word count fought both animations at once. This
+ * stands in for the real tool-calling flow the plan drafted
+ * (`render_map_events`, UI_REPURPOSE_PLAN.md §10): a model with native
+ * function-calling would call that tool mid-turn as it resolves each
+ * location's evidence, and the frontend executor would upsert it into the map
+ * as it arrives. There is no such model in the loop here -- this chat is a
+ * plain fetch, not an agent loop, and GeoLibre's own tool-calling machinery
+ * was removed with its AI Assistant -- so the reveal is played out against
+ * the complete fixture response instead of real incremental tool calls. The
+ * animations are genuine; the "generation" they are timed to is not.
  *
  * Renders as bare content, no header or close button of its own: this panel is
  * mounted inside GeoLibre's shared Style rail (see `useRegisterAnalystChatPanel`
@@ -88,8 +103,8 @@ interface Turn {
   query: string;
   /** Null while the request is in flight. */
   response: ChatResponse | null;
-  /** This turn's map sequence, empty until the response lands. */
-  mapEvents: readonly ChatMapEvent[];
+  /** This turn's location sequence, empty until the response lands. */
+  locations: readonly ChatMapLocation[];
   /**
    * How many words of `response.answer` are shown so far. 0 the instant the
    * response lands, climbing to the full word count as the simulated
@@ -104,6 +119,36 @@ function revealDurationMs(wordCount: number): number {
   return Math.max(2200, wordCount * 90);
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+/**
+ * How long each phase of the map sequence holds, in milliseconds.
+ * `settleBeforeReveal` is deliberately a little longer than
+ * `ChatMapPlayback`'s `CAMERA_FLY_MS` (1100ms): items should start fading in
+ * just after the camera actually lands, not while it is still mid-flight.
+ *
+ * A location's total dwell time is `settleBeforeReveal + betweenItems *
+ * item-count + beforeMerge + mergeHold`, so it grows with how many items a
+ * location has (fixtures now carry 4-5 each, see `fixtures.ts`). These values
+ * were briefly halved (400/400/300/400) to fight a perceived "line moving
+ * faster than the screen," which turned out to actually be this dwell time
+ * dwarfing a much shorter flight -- that overcorrected into feeling rushed
+ * once the flight itself (`CAMERA_FLY_MS`) was also slowed back down, so both
+ * are back to a deliberate, readable pace together.
+ */
+const MAP_TIMING = {
+  /** After flying to a location, before its first item fades in. */
+  settleBeforeReveal: 1250,
+  /** Between one item fading in and the next. */
+  betweenItems: 550,
+  /** After the last item, before the merge-into-one-badge transition starts. */
+  beforeMerge: 600,
+  /** How long the merge transition itself holds before moving on. */
+  mergeHold: 800,
+} as const;
+
 export function IntelChatPanel() {
   const [source, setSource] = useState<ChatSource>("news");
   const [draft, setDraft] = useState("");
@@ -111,10 +156,13 @@ export function IntelChatPanel() {
   const [pending, setPending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const nextKey = useRef(0);
-  // Cancels whichever turn's reveal loop is currently running, so starting a
-  // new question can never leave a stale rAF loop fighting the new one over
-  // the shared chat-map-sequence store (only one turn should ever drive it).
-  const cancelRevealRef = useRef<() => void>(() => {});
+  // Cancels whichever turn's text reveal is currently running, so starting a
+  // new question can never leave a stale rAF loop writing into a turn that is
+  // no longer the latest one.
+  const cancelTextRevealRef = useRef<() => void>(() => {});
+  // Cancels whichever turn's map sequence is currently mid-playback, so two
+  // sequences can never fight over the shared chat-map-sequence store.
+  const cancelMapSequenceRef = useRef<() => void>(() => {});
 
   // Follow the tail as turns arrive. Depends on the turn count rather than the
   // array so a mutation within an existing turn (the response landing) also
@@ -124,53 +172,91 @@ export function IntelChatPanel() {
     if (node) node.scrollTop = node.scrollHeight;
   }, [turns.length, pending]);
 
-  // Stop the reveal loop if the panel unmounts mid-animation (e.g. the user
+  // Stop both timelines if the panel unmounts mid-animation (e.g. the user
   // collapses Chat back onto the shared rail -- GeoLibre unmounts a
   // shared-rail panel's content while collapsed, it is not just hidden).
-  // Deliberately does not clear the map sequence: the sequence is meant to sit
-  // on the map as standing context until the next question, not disappear the
+  // Deliberately does not clear the map sequence itself: it is meant to sit on
+  // the map as standing context until the next question, not disappear the
   // moment the panel that started it closes.
-  useEffect(() => () => cancelRevealRef.current(), []);
+  useEffect(() => {
+    return () => {
+      cancelTextRevealRef.current();
+      cancelMapSequenceRef.current();
+    };
+  }, []);
 
   /**
-   * Plays the simulated generation for one turn: reveals `response.answer`
-   * word by word while stepping `ChatMapPlayback` through `mapEvents`, both
-   * driven off the same 0..1 progress ramp so they finish together. See the
-   * module docstring for what this stands in for and why.
+   * Reveals `answer` word by word for turn `key`. Throttled to only write
+   * state when the *rounded* word count actually changes -- word count climbs
+   * far slower than 60fps for any answer this short, so updating on every
+   * animation frame regardless (the previous version's bug) re-rendered the
+   * whole turn list dozens of times for no visible change, which is what made
+   * the panel feel laggy.
    */
-  const playReveal = (key: number, answer: string, mapEvents: readonly ChatMapEvent[]) => {
-    cancelRevealRef.current();
-    setChatMapSequence(mapEvents);
-
+  const playTextReveal = (key: number, answer: string) => {
+    cancelTextRevealRef.current();
     const words = answer.split(/\s+/).filter(Boolean);
     if (words.length === 0) return;
     const durationMs = revealDurationMs(words.length);
     const startedAt = performance.now();
     let cancelled = false;
     let frame = 0;
+    let lastRevealed = 0;
 
     const tick = () => {
       if (cancelled) return;
       const progress = Math.min(1, (performance.now() - startedAt) / durationMs);
-      setTurns((current) =>
-        current.map((turn) =>
-          turn.key === key
-            ? { ...turn, revealedWords: Math.round(progress * words.length) }
-            : turn,
-        ),
-      );
-      if (mapEvents.length > 0) {
-        setChatMapActiveIndex(Math.min(mapEvents.length - 1, Math.floor(progress * mapEvents.length)));
+      const revealed = Math.round(progress * words.length);
+      if (revealed !== lastRevealed) {
+        lastRevealed = revealed;
+        setTurns((current) =>
+          current.map((turn) => (turn.key === key ? { ...turn, revealedWords: revealed } : turn)),
+        );
       }
-      if (progress < 1) {
-        frame = requestAnimationFrame(tick);
-      }
+      if (progress < 1) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
-    cancelRevealRef.current = () => {
+    cancelTextRevealRef.current = () => {
       cancelled = true;
       cancelAnimationFrame(frame);
     };
+  };
+
+  /**
+   * Plays the location sequence: fly to each location, reveal its items one
+   * at a time, merge them into one badge, move on -- then, once every
+   * location has been visited, settle into the zoomed-out overview. See
+   * `chat-map-sequence.ts`'s module docstring for the state machine this
+   * drives and `ChatMapPlayback` for how each phase actually renders.
+   */
+  const playMapSequence = (locations: readonly ChatMapLocation[]) => {
+    cancelMapSequenceRef.current();
+    setChatMapSequence(locations);
+    if (locations.length === 0) return;
+
+    let cancelled = false;
+    cancelMapSequenceRef.current = () => {
+      cancelled = true;
+    };
+
+    (async () => {
+      for (let index = 0; index < locations.length; index++) {
+        if (cancelled) return;
+        advanceToLocation(index);
+        await sleep(MAP_TIMING.settleBeforeReveal);
+        const location = locations[index];
+        for (let item = 0; item < location.items.length; item++) {
+          if (cancelled) return;
+          revealNextItem();
+          await sleep(MAP_TIMING.betweenItems);
+        }
+        if (cancelled) return;
+        await sleep(MAP_TIMING.beforeMerge);
+        beginMerge();
+        await sleep(MAP_TIMING.mergeHold);
+      }
+      if (!cancelled) finishToOverview();
+    })();
   };
 
   const submit = async () => {
@@ -179,16 +265,17 @@ export function IntelChatPanel() {
     const key = nextKey.current++;
     setTurns((current) => [
       ...current,
-      { key, query, response: null, mapEvents: [], revealedWords: 0, error: null },
+      { key, query, response: null, locations: [], revealedWords: 0, error: null },
     ]);
     setDraft("");
     setPending(true);
     try {
-      const { response, mapEvents } = await sendChatMessage(query);
+      const { response, locations } = await sendChatMessage(query);
       setTurns((current) =>
-        current.map((turn) => (turn.key === key ? { ...turn, response, mapEvents } : turn)),
+        current.map((turn) => (turn.key === key ? { ...turn, response, locations } : turn)),
       );
-      playReveal(key, response.answer, mapEvents);
+      playTextReveal(key, response.answer);
+      playMapSequence(locations);
     } catch (cause) {
       setTurns((current) =>
         current.map((turn) =>

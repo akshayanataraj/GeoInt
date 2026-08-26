@@ -25,10 +25,10 @@
  */
 
 import type { ChatResponse, CountryMention, NewsTopic } from "./contracts";
-import type { ChatMapEvent } from "./map-events-contract";
+import type { ChatMapLocation } from "./map-events-contract";
 import type { S2Cell, S2Summary } from "./s2-contracts";
 import {
-  FIXTURE_CHAT_MAP_EVENTS,
+  FIXTURE_CHAT_MAP_LOCATIONS,
   FIXTURE_CHAT_RESPONSE,
   FIXTURE_NEWS_TOPICS,
   FIXTURE_S2_CELLS,
@@ -63,7 +63,7 @@ function delay<T>(value: T, ms = FIXTURE_DELAY_MS): Promise<T> {
 /**
  * `sendChatMessage`'s result.
  *
- * `response` is the real `ChatResponse` mirror. `mapEvents` is **not** part of
+ * `response` is the real `ChatResponse` mirror. `locations` is **not** part of
  * that contract -- it does not exist on the wire today and never has, since
  * the real `/news/chat` endpoint has no notion of per-event coordinates (see
  * `map-events-contract.ts`). It is returned as a sibling field, deliberately
@@ -72,7 +72,7 @@ function delay<T>(value: T, ms = FIXTURE_DELAY_MS): Promise<T> {
  */
 export interface ChatMessageResult {
   response: ChatResponse;
-  mapEvents: readonly ChatMapEvent[];
+  locations: readonly ChatMapLocation[];
 }
 
 /** `POST /api/v1/media/news/chat` */
@@ -89,9 +89,10 @@ export async function sendChatMessage(
     900,
   );
   // Every question resolves to the same fixture narrative and, with it, the
-  // same three-stop map sequence -- this endpoint does not vary by query,
-  // matching how the rest of `FIXTURE_CHAT_RESPONSE` is a fixed constant.
-  return { response, mapEvents: FIXTURE_CHAT_MAP_EVENTS };
+  // same three-stop location sequence -- this endpoint does not vary by
+  // query, matching how the rest of `FIXTURE_CHAT_RESPONSE` is a fixed
+  // constant.
+  return { response, locations: FIXTURE_CHAT_MAP_LOCATIONS };
 }
 
 /** `GET /api/v1/media/news/recent?limit&country` */
