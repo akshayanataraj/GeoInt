@@ -39,6 +39,43 @@ export interface IndiaRelevance {
   weight_guidance: string;
 }
 
+/**
+ * `MapMediaItemOut` -- one retrieved item surfaced at a resolved map
+ * location. `snippet` and `source_url` are always present but can be empty
+ * strings (the service's `_safe_text` default when a hit is missing the
+ * underlying field); `timestamp` can also be `""` when no timestamp field
+ * was found on the source hit at all -- see `MapLocation`'s note on why
+ * that happens and how the client maps it. There is no `kind` (news/social)
+ * field: this pipeline is News-only today, see `client.ts`'s mapping.
+ */
+export interface MapMediaItem {
+  id: string;
+  title: string;
+  snippet: string;
+  source_url: string;
+  timestamp: string;
+}
+
+/**
+ * `MapLocationOut` -- a place the answer's cited evidence resolves to, with
+ * the items found there. `lat`/`lng`/`label` come from GDELT's own
+ * already-computed `action_geo`/`action_location` on the source hit (a field
+ * read at retrieval time, not new geocoding on the service's part) -- only
+ * hits that have it populated (roughly 42% of the index, per the service's
+ * own measurement) contribute a location, so `map_locations` can be shorter
+ * than `citations`, and empty is expected for e.g. a guardrail-answered
+ * "hi". Grouped by lat/lng rounded to ~1km, ordered by each group's earliest
+ * item timestamp -- both a starting heuristic on the service's side, not a
+ * tuned contract guarantee.
+ */
+export interface MapLocation {
+  id: string;
+  lat: number;
+  lng: number;
+  label: string;
+  items: MapMediaItem[];
+}
+
 /** `ChatResponse` from `POST /api/v1/media/news/chat`. */
 export interface ChatResponse {
   session_id: string;
@@ -47,6 +84,7 @@ export interface ChatResponse {
   /** Markdown. */
   answer: string;
   citations: Citation[];
+  map_locations: MapLocation[];
   india_relevance: IndiaRelevance | null;
   /**
    * Free-form pipeline counters (candidates retrieved, fusion/rerank sizes,

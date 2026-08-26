@@ -51,8 +51,9 @@ import { AnswerText } from "./AnswerText";
  * resolves once with everything already in hand.
  *
  * What *is* implemented on top of that single round-trip is a client-side
- * *simulated* generation, run as two independent timelines once the fixture
- * response lands:
+ * *simulated* generation, run as two independent timelines once the response
+ * lands (the answer text is real; the reveal's pacing is not -- there is
+ * nothing to actually stream against):
  *
  * - The answer text reveals word by word (throttled to actual word-count
  *   changes, not every animation frame -- see `playTextReveal`).
@@ -60,7 +61,16 @@ import { AnswerText } from "./AnswerText";
  *   its items one at a time, merge them into one badge, fly to the next, and
  *   once every location has been visited, zoom out to fit them all with every
  *   badge clickable (see `chat-map-sequence.ts`'s `PlaybackPhase` and
- *   `playMapSequence` below).
+ *   `playMapSequence` below). `locations` comes from the response's real
+ *   `map_locations` field now (`client.ts`'s `toChatMapLocations`), sourced
+ *   from GDELT's already-resolved event coordinates on each cited hit -- see
+ *   `contracts.ts`'s `MapLocation` for exactly what is and isn't guaranteed
+ *   (not every citation resolves to a place, so this can legitimately be
+ *   shorter than `citations`, or empty for a source-less/guardrail answer).
+ *   `fixtures.ts`'s `FIXTURE_CHAT_MAP_LOCATIONS` is what this was built and
+ *   demoed against before the backend shipped real locations; it is no
+ *   longer wired to anything (nothing here imports it) but stays as a
+ *   reference shape.
  *
  * The two run concurrently rather than off one shared progress number: the
  * map's sequence is a genuine state machine (reveal → merge → next location →
@@ -73,7 +83,7 @@ import { AnswerText } from "./AnswerText";
  * as it arrives. There is no such model in the loop here -- this chat is a
  * plain fetch, not an agent loop, and GeoLibre's own tool-calling machinery
  * was removed with its AI Assistant -- so the reveal is played out against
- * the complete fixture response instead of real incremental tool calls. The
+ * the complete response instead of real incremental tool calls. The
  * animations are genuine; the "generation" they are timed to is not.
  *
  * Renders as bare content, no header or close button of its own: this panel is
@@ -163,6 +173,11 @@ export function IntelChatPanel() {
   // Cancels whichever turn's map sequence is currently mid-playback, so two
   // sequences can never fight over the shared chat-map-sequence store.
   const cancelMapSequenceRef = useRef<() => void>(() => {});
+  // The backend's own session id (guide §5.2), null until the first response
+  // assigns one. Passed back on every later call so follow-up questions reuse
+  // the server-side conversation memory instead of each one starting fresh --
+  // omitting it is not "no session," it is "always a new one."
+  const sessionIdRef = useRef<string | null>(null);
 
   // Follow the tail as turns arrive. Depends on the turn count rather than the
   // array so a mutation within an existing turn (the response landing) also
@@ -270,7 +285,8 @@ export function IntelChatPanel() {
     setDraft("");
     setPending(true);
     try {
-      const { response, locations } = await sendChatMessage(query);
+      const { response, locations } = await sendChatMessage(query, sessionIdRef.current ?? undefined);
+      sessionIdRef.current = response.session_id;
       setTurns((current) =>
         current.map((turn) => (turn.key === key ? { ...turn, response, locations } : turn)),
       );

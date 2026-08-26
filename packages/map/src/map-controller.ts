@@ -301,12 +301,57 @@ function resolveMapStyle(styleUrl: string | undefined): string | maplibregl.Styl
 }
 
 /**
+ * Where the bundled India boundary overlay is served from (see
+ * `createOsmMapStyle`'s docstring). A plain root-relative path, not resolved
+ * against `import.meta.env.BASE_URL`/`document.baseURI` the way
+ * `BasemapExtractPanel.tsx`/`pmtiles-basemap-url.ts` resolve
+ * `basemaps-assets` -- this console is served from the site root (the Docker
+ * nginx build, not the sub-path GitHub Pages demo those two account for), so
+ * a plain path is enough, matching `protomaps-basemap.ts`'s own unresolved
+ * `DEFAULT_ASSETS_BASE` default for the same reason.
+ */
+const INDIA_BOUNDARY_GEOJSON_URL = "/regional-overlays/india-official-boundary.geojson";
+const INDIA_BOUNDARY_SOURCE_ID = "india-official-boundary";
+
+/**
  * The classic OpenStreetMap "Standard" raster layer, served from
  * `tile.openstreetmap.org`. This is the OSM Foundation's own tile server, not
  * a third-party mirror, so it is subject to their tile usage policy (an
  * `OpenStreetMap contributors` attribution, and no bulk/offline scraping) --
  * fine for this console's interactive use, but not a basis for a
  * high-volume production deployment without switching to a paid provider.
+ *
+ * A self-hosted vector basemap (built offline from a Geofabrik India extract
+ * via `protomaps/basemaps`' Planetiler profile, shipped as a ~3.2GB PMTiles
+ * file baked into the Docker image) briefly replaced this, specifically to
+ * drop the runtime dependency on this external tile API. That traded a real
+ * problem for a different one: the archive got re-copied through every build
+ * stage on *every* `docker compose build`, even for a one-line unrelated code
+ * change, which is a bad trade for this project's edit-rebuild-verify cadence
+ * (this repo has no volume-mount deploy path for it yet). Reverted back to
+ * this until that rebuild cost is solved separately (e.g. serving the archive
+ * from outside the image instead of baking it in).
+ *
+ * Layered on top: India's officially depicted boundary (Survey of India
+ * convention -- undivided Jammu & Kashmir, including Gilgit-Baltistan/
+ * Pakistan-administered Kashmir and Aksai Chin/the Shaksgam valley as Indian
+ * territory), because standard OSM data draws the neutral de-facto Line of
+ * Control / Line of Actual Control there instead -- the same legal/policy
+ * reason `regional-basemaps.ts`'s `google-hybrid`/`google-roadmap` request
+ * Google's `gl=in` region bias. Unlike raster tiles, OSM's own tiles cannot
+ * be edited, so this draws the correct line as a vector overlay above them.
+ * Geometry: `datameet/maps`' `india-composite.geojson` (CC-0; India + Aksai
+ * Chin from the US State Department's LSIB dataset, Pakistan-administered
+ * Kashmir from a Pakistan admin-boundaries dataset, the Shaksgam valley from
+ * Natural Earth's disputed-areas layer), simplified from ~253k to ~7.7k
+ * coordinate points (`mapshaper -simplify 3%`) since the source shapefile is
+ * far more detailed than a raster basemap overlay needs.
+ *
+ * Solid (no dasharray) and `#8d618b`, OpenStreetMap Carto's own
+ * `@admin-boundaries` colour for admin_level=2 country borders (`style/
+ * admin.mss`) -- whose own always-visible line also carries no dasharray,
+ * dashing there is only a thin secondary overlay at high zoom, so this is
+ * what OSM's own style actually looks like, not a stylistic compromise.
  */
 function createOsmMapStyle(): maplibregl.StyleSpecification {
   return {
@@ -321,6 +366,10 @@ function createOsmMapStyle(): maplibregl.StyleSpecification {
         maxzoom: 19,
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       },
+      [INDIA_BOUNDARY_SOURCE_ID]: {
+        type: "geojson",
+        data: INDIA_BOUNDARY_GEOJSON_URL,
+      },
     },
     layers: [
       {
@@ -329,6 +378,23 @@ function createOsmMapStyle(): maplibregl.StyleSpecification {
         paint: { "background-color": BLANK_BACKGROUND_COLOR },
       },
       { id: "osm-basemap", type: "raster", source: "osm-basemap" },
+      // A pale halo under the line keeps the boundary legible over
+      // both light and dark patches of the raster tiles beneath it.
+      {
+        id: "india-boundary-halo",
+        type: "line",
+        source: INDIA_BOUNDARY_SOURCE_ID,
+        paint: { "line-color": "#ffffff", "line-width": 4.5, "line-opacity": 0.6 },
+      },
+      {
+        id: "india-boundary-line",
+        type: "line",
+        source: INDIA_BOUNDARY_SOURCE_ID,
+        paint: {
+          "line-color": "#8d618b",
+          "line-width": 2.2,
+        },
+      },
     ],
   };
 }

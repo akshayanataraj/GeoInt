@@ -1,52 +1,84 @@
 /**
  * The single seam between the intelligence console UI and the media service.
  *
- * Nothing here performs a network request yet: the backend is still being built
- * and this app is not wired to it. Every function returns fixture data after a
- * short delay so panels exercise their real loading and error states instead of
- * rendering instantly from a constant.
+ * `sendChatMessage` performs a real network request against the News chat
+ * endpoint, following `Fotress_SNSF/docs/NEWS_SERVICE_INTEGRATION_GUIDE.md`
+ * (the News module's own frontend-integration doc -- authoritative over
+ * anything inferred from reading the backend's source directly). Every other
+ * function here still returns fixture data after a short delay, matching
+ * their module's actual backend state (Social/Monitoring/S2/Reporting/
+ * Feedback are empty scaffolds per that same guide's §6) so panels exercise
+ * their real loading and error states instead of rendering instantly from a
+ * constant.
  *
- * The point of routing every panel through this one module is that connecting
- * the backend later is a change *here* and nowhere else. Each function carries
- * the exact method and path it will call, taken from the service's README and
- * router modules, so there is no guessing at that point.
+ * The point of routing every panel through this one module is that wiring up
+ * the rest of the backend later is a change *here* and nowhere else. Each
+ * still-fixture function carries the exact method and path it will call, so
+ * there is no guessing at that point.
  *
- * Two contract facts that shape the UI and are easy to get wrong later:
+ * Two contract facts that shape the UI and are easy to get wrong later
+ * (guide §2, §5.2):
  *
- * - **Every media endpoint needs a bearer token** from `user_service`, which
- *   does not exist in the backend repository yet. `AuthGate`'s sign-in is a
- *   client-side stub, so there is no token to send. Real calls cannot be
- *   switched on before that service and the gateway exist -- see
- *   {@link INTEL_API_BASE}.
+ * - **Every media endpoint needs a bearer token.** There is no real identity
+ *   service (`user_service`) yet, so the backend accepts one fixed
+ *   shared-secret dev token instead (`MEDIA_DEV_BEARER_TOKEN` on its side,
+ *   `VITE_MEDIA_DEV_TOKEN`/the hardcoded default below on this one) -- every
+ *   caller is the same synthetic `dev-user`, not real per-user auth. Replace
+ *   this with a token from `AuthGate` once `user_service` exists.
  * - **Chat does not stream.** `ChatRequest` carries a `stream` field, but the
- *   handler is a synchronous `def` returning a whole `ChatResponse`; there is no
- *   SSE. So `sendChatMessage` resolves once with a complete answer and the UI
- *   must not be built around token-by-token rendering.
+ *   handler is a synchronous `def` returning a whole `ChatResponse`; there is
+ *   no SSE. So `sendChatMessage` resolves once with a complete answer and the
+ *   UI must not be built around token-by-token rendering.
  */
 
-import type { ChatResponse, CountryMention, NewsTopic } from "./contracts";
+import type { ChatResponse, CountryMention, MapLocation, NewsTopic } from "./contracts";
 import type { ChatMapLocation } from "./map-events-contract";
 import type { S2Cell, S2Summary } from "./s2-contracts";
 import {
-  FIXTURE_CHAT_MAP_LOCATIONS,
-  FIXTURE_CHAT_RESPONSE,
   FIXTURE_NEWS_TOPICS,
   FIXTURE_S2_CELLS,
   FIXTURE_S2_SUMMARY,
 } from "./fixtures";
 
 /**
- * Public API prefix, from the service's `platform/config.py` (`API_PREFIX`).
- * Reached through the platform's single public origin (`edge_gateway`), so the
- * browser never addresses a service directly.
+ * The media service's own origin plus `API_PREFIX` (`platform/config.py`),
+ * called directly -- no dev-server proxy, no gateway, no nginx involvement on
+ * this side. Per `Fotress_SNSF/docs/NEWS_SERVICE_INTEGRATION_GUIDE.md` §1:
+ * "There is no `edge_gateway` in front of it yet... this is the service's own
+ * origin." The service sets `MEDIA_CORS_ALLOWED_ORIGINS` permissively enough
+ * for this (confirmed `*` on the running deployment), so a direct
+ * cross-origin `fetch` from the browser is the intended integration path, not
+ * a workaround.
  *
- * Deliberately unused until there is something to call: it documents the target
- * and keeps the paths below honest.
+ * Overridable via `VITE_MEDIA_API_BASE_URL` for a deployment where the
+ * service lives somewhere other than this default (this machine, container
+ * `news-media-service`, published on host port 8093 -- *not* the `8000` the
+ * guide's own generic example uses, which is the container's internal port).
  */
-export const INTEL_API_BASE = "/api/v1/media";
+export const INTEL_API_BASE =
+  import.meta.env.VITE_MEDIA_API_BASE_URL || "http://localhost:8093/api/v1/media";
 
-/** True while the console is running on fixtures rather than the live service. */
-export const INTEL_USING_FIXTURES = true;
+/**
+ * Shared-secret dev bearer token (guide §2) -- not real per-user auth, every
+ * caller is the same synthetic `dev-user`. Defaults to this deployment's
+ * actual configured value (confirmed via `docker inspect news-media-service`,
+ * matching its `MEDIA_DEV_BEARER_TOKEN`), overridable via `VITE_MEDIA_DEV_TOKEN`
+ * for a deployment using a different one. A wrong or missing token 401s every
+ * call below (guide §2) -- there is no silent fallback to fixtures for chat.
+ */
+const MEDIA_DEV_TOKEN: string =
+  import.meta.env.VITE_MEDIA_DEV_TOKEN || "local-dev-9f2c7a1e4b6d8035";
+
+/**
+ * True while a given panel is running on fixtures rather than the live
+ * service. Chat is real; every other panel here is still a fixture.
+ */
+export const INTEL_USING_FIXTURES = {
+  chat: false,
+  recentTopics: true,
+  countryMentions: true,
+  s2: true,
+} as const;
 
 /**
  * Fixture latency. Long enough that a skeleton state is visibly exercised,
@@ -63,16 +95,59 @@ function delay<T>(value: T, ms = FIXTURE_DELAY_MS): Promise<T> {
 /**
  * `sendChatMessage`'s result.
  *
- * `response` is the real `ChatResponse` mirror. `locations` is **not** part of
- * that contract -- it does not exist on the wire today and never has, since
- * the real `/news/chat` endpoint has no notion of per-event coordinates (see
- * `map-events-contract.ts`). It is returned as a sibling field, deliberately
- * kept out of `ChatResponse` itself, so nothing mistakes this for a verified
- * mirror the way `contracts.ts`'s other types are.
+ * `response` is the real `ChatResponse` mirror, `map_locations` included.
+ * `locations` is a separate, *mapped* field rather than just re-exposing
+ * `response.map_locations` directly: the wire shape (`MapLocation`/
+ * `MapMediaItem`, snake_case, no `kind`) is a mirror of the service's
+ * Pydantic models, while `ChatMapPlayback`/`chat-map-sequence.ts` are built
+ * against this app's own internal shape (`ChatMapLocation`/`ChatMediaItem`,
+ * camelCase, `kind` required) -- keeping the boundary explicit here means
+ * the wire mirror can track the service's actual field names verbatim
+ * without leaking them into the playback code. See `toChatMapLocations`.
  */
 export interface ChatMessageResult {
   response: ChatResponse;
   locations: readonly ChatMapLocation[];
+}
+
+/**
+ * Maps the wire `MapLocation[]` onto this app's `ChatMapLocation[]`.
+ *
+ * - `kind` is always `"news"`: the service has no news/social distinction on
+ *   a map item (`MapMediaItemOut` carries no `kind` field) because this
+ *   pipeline is the News module only -- Social is still an empty scaffold.
+ *   Revisit once a social-sourced item can appear here.
+ * - `snippet`/`sourceUrl` fall back to `undefined` on an empty string so the
+ *   UI's `if (item.snippet)`/`if (item.sourceUrl)` conditionals (which
+ *   expect "field absent", not "field blank") behave correctly against the
+ *   service's `_safe_text` default of `""` for a missing value.
+ * - `timestamp` falls back to the *response's* own timestamp when a specific
+ *   item has none (`_hit_timestamp` on the service returns `""` when no
+ *   timestamp field exists on that hit at all) -- an approximation, but a
+ *   real date beats rendering `Invalid Date`.
+ * - `label` falls back to the coordinates themselves on the rare case every
+ *   grouped item's location label was blank too (`_map_locations` on the
+ *   service already prefers `action_location` over `action_country` over
+ *   `""`) -- so a location is never shown with no visible name at all.
+ */
+function toChatMapLocations(
+  wireLocations: readonly MapLocation[],
+  responseTimestamp: string,
+): ChatMapLocation[] {
+  return wireLocations.map((location) => ({
+    id: location.id,
+    lat: location.lat,
+    lng: location.lng,
+    label: location.label || `${location.lat.toFixed(2)}, ${location.lng.toFixed(2)}`,
+    items: location.items.map((item) => ({
+      id: item.id,
+      kind: "news",
+      title: item.title,
+      snippet: item.snippet || undefined,
+      sourceUrl: item.source_url || undefined,
+      timestamp: item.timestamp || responseTimestamp,
+    })),
+  }));
 }
 
 /** `POST /api/v1/media/news/chat` */
@@ -80,19 +155,50 @@ export async function sendChatMessage(
   query: string,
   sessionId?: string,
 ): Promise<ChatMessageResult> {
-  const response = await delay(
-    {
-      ...FIXTURE_CHAT_RESPONSE,
-      query,
-      session_id: sessionId ?? FIXTURE_CHAT_RESPONSE.session_id,
+  const res = await fetch(`${INTEL_API_BASE}/news/chat`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${MEDIA_DEV_TOKEN}`,
     },
-    900,
-  );
-  // Every question resolves to the same fixture narrative and, with it, the
-  // same three-stop location sequence -- this endpoint does not vary by
-  // query, matching how the rest of `FIXTURE_CHAT_RESPONSE` is a fixed
-  // constant.
-  return { response, locations: FIXTURE_CHAT_MAP_LOCATIONS };
+    body: JSON.stringify({
+      query,
+      session_id: sessionId ?? null,
+    }),
+  });
+
+  if (!res.ok) {
+    const code = await extractErrorCode(res);
+    throw new Error(`News chat request failed (${res.status}): ${code}`);
+  }
+
+  const response = (await res.json()) as ChatResponse;
+  return { response, locations: toChatMapLocations(response.map_locations, response.timestamp) };
+}
+
+/**
+ * Pulls `{"detail": {"error": "<code>"}}` out of a failed response body, per
+ * `contracts.ts`'s `INTEL_ERROR_CODES`. Falls back to the raw status text if
+ * the body is not that shape (e.g. an upstream proxy error, not the service
+ * itself).
+ */
+async function extractErrorCode(res: Response): Promise<string> {
+  try {
+    const body: unknown = await res.json();
+    if (
+      typeof body === "object" &&
+      body !== null &&
+      "detail" in body &&
+      typeof (body as { detail?: unknown }).detail === "object" &&
+      (body as { detail?: unknown }).detail !== null &&
+      "error" in (body as { detail: Record<string, unknown> }).detail
+    ) {
+      return String((body as { detail: { error: unknown } }).detail.error);
+    }
+  } catch {
+    // Body was not JSON (or not readable) -- fall through to the status text.
+  }
+  return res.statusText || "unknown";
 }
 
 /** `GET /api/v1/media/news/recent?limit&country` */

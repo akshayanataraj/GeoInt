@@ -16,6 +16,13 @@ import type {
 
 const PATH_SOURCE_ID = "__geoint_chat_events_path";
 const PATH_LAYER_ID = "__geoint_chat_events_path_line";
+const PATH_GLOW_LAYER_ID = "__geoint_chat_events_path_glow";
+// Vivid orange rather than a plain red: the severity dots/badges already use
+// red for "critical" (eventSeverityText), so a red path line would read as
+// another severity signal instead of a distinct "this is the travelled
+// route" affordance. Orange stays clearly in the same warm/alert family
+// without colliding with that meaning.
+const PATH_LINE_COLOR = "#ff6a1a";
 // The camera's flight duration -- see `animatePathGrowth`'s docstring for why
 // the line no longer runs its own timer at all, rather than one tuned to
 // match this: it reads the camera's live position every frame, so the line's
@@ -215,12 +222,16 @@ function safely(fn: () => void): void {
   }
 }
 
-/** Read a CSS custom property off the document root as an `hsl(...)` string. */
-function resolvedHsl(name: string): string {
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return value ? `hsl(${value})` : "#0ea5e9";
-}
-
+/**
+ * Two stacked line layers, not one: MapLibre has no CSS-style drop-shadow for
+ * a line, but its `line-blur` paint property does the same job directly --
+ * a wide, blurred, translucent layer underneath a crisp full-opacity core is
+ * the standard way to fake a neon "glow" in a MapLibre/Mapbox style, the same
+ * technique the India-boundary halo uses (`india-boundary-halo`) minus the
+ * blur, since that one wants legibility over a busy basemap rather than a
+ * glow effect. Order matters: the glow layer must be added *before* the core
+ * line so the core renders on top of it, not the other way around.
+ */
 function ensurePathLayer(map: MapLibreMap): void {
   if (!map.getSource(PATH_SOURCE_ID)) {
     map.addSource(PATH_SOURCE_ID, {
@@ -228,15 +239,30 @@ function ensurePathLayer(map: MapLibreMap): void {
       data: { type: "FeatureCollection", features: [] },
     });
   }
+  if (!map.getLayer(PATH_GLOW_LAYER_ID)) {
+    map.addLayer({
+      id: PATH_GLOW_LAYER_ID,
+      type: "line",
+      source: PATH_SOURCE_ID,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": PATH_LINE_COLOR,
+        "line-width": 13,
+        "line-blur": 8,
+        "line-opacity": 0.6,
+      },
+    });
+  }
   if (!map.getLayer(PATH_LAYER_ID)) {
     map.addLayer({
       id: PATH_LAYER_ID,
       type: "line",
       source: PATH_SOURCE_ID,
+      layout: { "line-cap": "round", "line-join": "round" },
       paint: {
-        "line-color": resolvedHsl("--primary"),
+        "line-color": PATH_LINE_COLOR,
         "line-width": 3,
-        "line-opacity": 0.9,
+        "line-opacity": 0.95,
       },
     });
   }
@@ -726,6 +752,7 @@ function clearAll(map: MapLibreMap | null, markers: Map<string, maplibregl.Marke
   markers.clear();
   if (map) {
     if (map.getLayer(PATH_LAYER_ID)) map.removeLayer(PATH_LAYER_ID);
+    if (map.getLayer(PATH_GLOW_LAYER_ID)) map.removeLayer(PATH_GLOW_LAYER_ID);
     if (map.getSource(PATH_SOURCE_ID)) map.removeSource(PATH_SOURCE_ID);
   }
 }

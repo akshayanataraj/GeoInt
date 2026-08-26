@@ -219,6 +219,11 @@ export const FIXTURE_CHAT_RESPONSE: ChatResponse = {
       snippet: "Inspection teams were dispatched following the rainfall warning.",
     },
   ],
+  // Empty, not a wire-shaped copy of FIXTURE_CHAT_MAP_LOCATIONS below: this
+  // fixture is orphaned (nothing imports FIXTURE_CHAT_RESPONSE any more,
+  // chat is real now), so there is no live consumer to keep a second,
+  // divergent "same narrative" dataset in sync for.
+  map_locations: [],
   india_relevance: { level: 3, weight_guidance: "Weight Indian sources heavily" },
   retrieval_metrics: {
     candidates: 248,

@@ -1,17 +1,23 @@
 /**
- * PROVISIONAL shapes for the chat-driven map playback -- like `s2-contracts.ts`,
- * these are **not** a mirror of anything the backend returns today. They are
- * this frontend's own strawman for the "render this on the map" tool contract
- * drafted in `UI_REPURPOSE_PLAN.md` §10 (`render_map_events`), shaped so the
- * chat panel and the map playback overlay can be built against a concrete
- * shape now rather than waiting on backend sign-off.
+ * Shapes for the chat-driven map playback -- this app's own internal
+ * representation, not a wire mirror. The News chat response now carries a
+ * real `map_locations` field (`contracts.ts`'s `MapLocation`/`MapMediaItem`,
+ * snake_case, GDELT-resolved coordinates, no `kind`); `client.ts`'s
+ * `toChatMapLocations` maps that onto the shapes below, which is what
+ * `ChatMapPlayback`/`chat-map-sequence.ts` are actually built against. Kept
+ * as a separate app-internal type (rather than using the wire type directly)
+ * so this app's own field names/conventions (`kind` always present, camelCase)
+ * don't have to track the service's Pydantic models verbatim -- see
+ * `toChatMapLocations`'s docstring for the specific mapping decisions
+ * (`kind` defaulted to `"news"`, blank-string fallbacks, etc.).
  *
- * The blocking fact from that section still holds: the real News/Social
- * contract has no per-event coordinates, and no per-event coordinates+time in
- * the same place -- `/news/recent` has dated timeline steps with no
- * coordinates, `/news/country/coordinates` has country centroids with no
- * time. So every `ChatMapLocation` in this app today comes from
- * `fixtures.ts`, not a live response.
+ * Originally drafted before the backend had any of this (the "render this on
+ * the map" tool contract in `UI_REPURPOSE_PLAN.md` §10, `render_map_events`)
+ * so the chat panel and map playback overlay could be built against a
+ * concrete shape without waiting on backend sign-off; `fixtures.ts`'s
+ * `FIXTURE_CHAT_MAP_LOCATIONS` is what exercised it during that period and
+ * is no longer wired to anything live (see `IntelChatPanel.tsx`'s module
+ * docstring).
  *
  * One location, multiple items: a real answer's evidence naturally clusters
  * by place (several sources reporting on the same district), not one
