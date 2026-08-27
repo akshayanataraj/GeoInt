@@ -157,6 +157,7 @@ import { KnowledgeCardConsentDialog } from "./KnowledgeCardConsentDialog";
 import { MapGrid } from "./MapGrid";
 import { RemoteCursorsOverlay } from "./RemoteCursorsOverlay";
 import { ChatMapPlayback } from "../intel/ChatMapPlayback";
+import { S2GridLayer } from "../intel/S2GridLayer";
 import { useCommandBridge } from "../../hooks/useCommandBridge";
 import { useEmbedApi } from "../../hooks/useEmbedApi";
 import { appendDiagnostic, useDiagnosticsSnapshot } from "../../lib/diagnostics";
@@ -736,6 +737,10 @@ export function DesktopShell({
   });
   const rightPanelState = useRightPanelState();
   const activePanelId = rightPanelState.activeId;
+  // S2GridLayer only draws while the analyst has the S2 Grid dock panel open
+  // (`IntelRail`'s toggle) -- see that component's own docstring for why it
+  // is conditionally mounted rather than always-on like `ChatMapPlayback`.
+  const s2PanelOpen = useAppStore((s) => s.ui.intel.openPanels.includes("s2"));
   const replaceStylePanelIds = rightPanelState.visibleIds.filter(
     (id) => rightPanelState.panelDocks[id] === "replace-style",
   );
@@ -2286,6 +2291,9 @@ export function DesktopShell({
               />
               <RemoteCursorsOverlay mapControllerRef={mapControllerRef} />
               <ChatMapPlayback mapControllerRef={mapControllerRef} />
+              {s2PanelOpen ? (
+                <S2GridLayer mapControllerRef={mapControllerRef} mapReadyGeneration={mapReadyGeneration} />
+              ) : null}
               <CommentMapOverlay
                 mapControllerRef={mapControllerRef}
                 onSelectComment={(commentId) => {

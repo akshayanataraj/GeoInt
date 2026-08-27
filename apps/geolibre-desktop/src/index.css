@@ -206,6 +206,34 @@ html:lang(fa) {
   background-color: hsl(var(--status-critical) / 0.2);
 }
 
+/* S2 Grid's own three-tier scale (green/yellow/red, per S2_GRID.md section
+   2.2 -- distinct from the four-band ladder above, which is chat's own
+   `EventSeverity` vocabulary). Reuses the same --status-* tokens the block
+   above already documents as reserved for "S2 alerts, monitoring, live
+   status" (see packages/ui/src/globals.css) rather than introducing a new
+   green accent: `green` (~66% of the real corpus, "nothing unusual") takes
+   muted-foreground for the same reason `intel-sev-routine` does -- the calm
+   majority state should not draw the eye -- while `yellow`/`red` carry the
+   real signal via warning/critical. */
+@utility intel-tier-green {
+  color: hsl(var(--muted-foreground));
+}
+@utility intel-tier-yellow {
+  color: hsl(var(--status-warning));
+}
+@utility intel-tier-red {
+  color: hsl(var(--status-critical));
+}
+@utility intel-tier-bg-green {
+  background-color: hsl(var(--muted-foreground) / 0.15);
+}
+@utility intel-tier-bg-yellow {
+  background-color: hsl(var(--status-warning) / 0.18);
+}
+@utility intel-tier-bg-red {
+  background-color: hsl(var(--status-critical) / 0.2);
+}
+
 /* Elevation-tied shadow scale, replacing Tailwind's stock one. Each step maps to
    a surface in the ladder rather than being picked by eye:
 

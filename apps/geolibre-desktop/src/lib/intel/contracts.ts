@@ -47,6 +47,13 @@ export interface IndiaRelevance {
  * was found on the source hit at all -- see `MapLocation`'s note on why
  * that happens and how the client maps it. There is no `kind` (news/social)
  * field: this pipeline is News-only today, see `client.ts`'s mapping.
+ *
+ * `cited` is `true` when this item's `id` also appears in the response's
+ * `citations[]` -- i.e. the answer's prose actually referenced it -- and
+ * `false` for an item retrieval surfaced at this location that the answer
+ * didn't quote from. A location's `items` is **not** limited to what the
+ * answer cited (see `MapLocation`'s note); this is what lets the UI tell
+ * "the model vetted this" apart from "this exists but wasn't quoted."
  */
 export interface MapMediaItem {
   id: string;
@@ -54,11 +61,16 @@ export interface MapMediaItem {
   snippet: string;
   source_url: string;
   timestamp: string;
+  cited: boolean;
 }
 
 /**
- * `MapLocationOut` -- a place the answer's cited evidence resolves to, with
- * the items found there. `lat`/`lng`/`label` come from GDELT's own
+ * `MapLocationOut` -- a place retrieval's evidence resolves to, with the
+ * items found there. `items` deliberately includes every retrieved item that
+ * resolved to this place, not only the ones the answer's prose cited (see
+ * `MapMediaItem.cited`) -- an analyst opening a location should see all
+ * existing coverage of that story at that place, not just the subset the
+ * model happened to quote from. `lat`/`lng`/`label` come from GDELT's own
  * already-computed `action_geo`/`action_location` on the source hit (a field
  * read at retrieval time, not new geocoding on the service's part) -- only
  * hits that have it populated (roughly 42% of the index, per the service's

@@ -33,11 +33,12 @@
 
 import type { ChatResponse, CountryMention, MapLocation, NewsTopic } from "./contracts";
 import type { ChatMapLocation } from "./map-events-contract";
-import type { S2Cell, S2Summary } from "./s2-contracts";
+import type { S2Filters } from "./s2-filters";
+import type { S2MapData, S2Series } from "./s2-contracts";
 import {
   FIXTURE_NEWS_TOPICS,
-  FIXTURE_S2_CELLS,
-  FIXTURE_S2_SUMMARY,
+  FIXTURE_S2_MAP,
+  FIXTURE_S2_SERIES,
 } from "./fixtures";
 
 /**
@@ -146,6 +147,7 @@ function toChatMapLocations(
       snippet: item.snippet || undefined,
       sourceUrl: item.source_url || undefined,
       timestamp: item.timestamp || responseTimestamp,
+      cited: item.cited,
     })),
   }));
 }
@@ -221,14 +223,48 @@ export async function extractCountryMentions(content: string): Promise<CountryMe
 }
 
 /**
- * S2 cell aggregates. No endpoint yet -- the service's `modules/s2/` package is
- * an empty scaffold, so there is not even a path to write down here. See
- * `s2-contracts.ts` for why these shapes are provisional.
+ * `GET /api/s2/map` (target shape -- no endpoint yet, the service's
+ * `modules/s2/` package is an empty scaffold). See `s2-contracts.ts`'s module
+ * docstring for how closely this mirrors S2_GRID.md's documented response,
+ * and its one deliberate deviation (`poly`'s coordinate order).
+ *
+ * `filters` (`s2-filters.ts`) stands in for the real `n`/`s`/`e`/`w`/`zoom`/
+ * `date`/`roots`/`codes`/`countries` viewport-and-taxonomy query params --
+ * simplified to what the fixture data can actually support (tier, a place
+ * substring) rather than fabricating filterable taxonomy/country fields the
+ * fixture cells/points don't carry. Applied client-side here as a stand-in
+ * for what a real backend would do server-side; a cell has no place name of
+ * its own to match `place` against, so that filter narrows `points` only --
+ * `tiers` narrows both, since every cell and point already carries one.
  */
-export async function fetchS2Summary(): Promise<S2Summary> {
-  return delay({ ...FIXTURE_S2_SUMMARY });
+export async function fetchS2Map(filters: S2Filters): Promise<S2MapData> {
+  const cells = FIXTURE_S2_MAP.cells.filter((cell) => filters.tiers.has(cell.tier)).map((cell) => ({ ...cell }));
+  const placeQuery = filters.place.trim().toLowerCase();
+  const points = FIXTURE_S2_MAP.points
+    .filter((point) => filters.tiers.has(point.tier))
+    .filter((point) => !placeQuery || point.place.toLowerCase().includes(placeQuery))
+    .map((point) => ({ ...point }));
+  return delay({
+    ...FIXTURE_S2_MAP,
+    cells,
+    points,
+    nLocations: points.length,
+    nEvents: cells.reduce((sum, cell) => sum + cell.n, 0),
+  });
 }
 
-export async function fetchS2Cells(): Promise<S2Cell[]> {
-  return delay(FIXTURE_S2_CELLS.map((cell) => ({ ...cell })));
+/**
+ * `GET /api/s2/series` -- the metrics panel's KPI/trend source, distinct from
+ * `fetchS2Map`'s per-cell geometry (see `S2SeriesSummary`'s docstring). Only
+ * `span` is threaded into the fixture response (it has nothing else to vary
+ * against, being one static dataset); still accepts the full `S2Filters` so
+ * the call site doesn't need a second, narrower parameter type for what is
+ * conceptually "the same current selection" `fetchS2Map` reads.
+ */
+export async function fetchS2Series(filters: S2Filters): Promise<S2Series> {
+  return delay({
+    ...FIXTURE_S2_SERIES,
+    span: filters.span,
+    buckets: FIXTURE_S2_SERIES.buckets.map((bucket) => ({ ...bucket })),
+  });
 }

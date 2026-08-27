@@ -4,10 +4,14 @@
  * Chat and its map-location data are real now (`client.ts`'s `sendChatMessage`
  * calls the live News service and maps its `map_locations` field) -- what's
  * left here backs the panels still running on fixtures: Event Feed
- * (`FIXTURE_NEWS_TOPICS`, mirroring `GET /news/recent`) and the S2 Grid
- * panels (`FIXTURE_S2_SUMMARY`/`FIXTURE_S2_CELLS`), since S2 is still an
- * empty backend scaffold. They exist to make the layout, density, and visual
- * design reviewable at realistic volumes, which an empty console cannot be.
+ * (`FIXTURE_NEWS_TOPICS`, mirroring `GET /news/recent`) and the S2 Grid layer
+ * and panel (`FIXTURE_S2_MAP` mirrors `GET /api/s2/map`'s per-cell/per-point
+ * geometry; `FIXTURE_S2_SERIES` mirrors `GET /api/s2/series`'s aggregate
+ * KPI rollup -- see `s2-contracts.ts` for why the panel is built against the
+ * latter rather than re-deriving from the former), since the S2 module is
+ * still an empty backend scaffold. They exist to make
+ * the layout, density, and visual design reviewable at realistic volumes,
+ * which an empty console cannot be.
  *
  * Rules for anything added here:
  *
@@ -27,93 +31,157 @@
  */
 
 import type { NewsTopic } from "./contracts";
-import type { S2Cell, S2Summary } from "./s2-contracts";
+import type { S2Cell, S2MapData, S2Point, S2Series } from "./s2-contracts";
 
-/** Fixed reference instant for every timestamp below. */
-const T0 = "2026-08-25T09:00:00Z";
+/**
+ * Builds a rectangular cell polygon in the doc's own `[lat, lng]` corner
+ * order (SW, SE, NE, NW -- see `s2-contracts.ts`'s module docstring), sized
+ * to roughly match the ~155km edge length S2_GRID.md's table gives level 6.
+ */
+function cellPoly(
+  centerLat: number,
+  centerLng: number,
+  halfDegrees = 0.7,
+): readonly [number, number][] {
+  const south = centerLat - halfDegrees;
+  const north = centerLat + halfDegrees;
+  const west = centerLng - halfDegrees;
+  const east = centerLng + halfDegrees;
+  return [
+    [south, west],
+    [south, east],
+    [north, east],
+    [north, west],
+  ];
+}
 
-export const FIXTURE_S2_SUMMARY: S2Summary = {
-  totalEvents: 1_284,
-  cellsActive: 37,
-  bySeverity: { routine: 21, elevated: 9, high: 5, critical: 2 },
-  asOf: T0,
-  window: "24h",
+export const FIXTURE_S2_MAP: S2MapData = {
+  level: 6,
+  cellKm: 155,
+  nLocations: 14,
+  nEvents: 1_284,
+  truncated: false,
+  cells: (
+    [
+      { token: "3f9c14", lat: 28.61, lng: 77.21, n: 214, sev: 0.74, tier: "red", growth: 0.42, growing: true },
+      { token: "3f9c2b", lat: 19.08, lng: 72.88, n: 186, sev: 0.51, tier: "yellow", growth: 0.18, growing: true },
+      { token: "3fa071", lat: 22.57, lng: 88.36, n: 143, sev: 0.48, tier: "yellow", growth: -0.06, growing: false },
+      { token: "3fa0c8", lat: 13.08, lng: 80.27, n: 128, sev: 0.29, tier: "green", growth: 0.09, growing: false },
+      { token: "3fb133", lat: 23.26, lng: 77.41, n: 97, sev: 0.22, tier: "green", growth: 0, growing: false },
+      { token: "3fb1a4", lat: 17.39, lng: 78.49, n: 84, sev: 0.31, tier: "green", growth: -0.22, growing: false },
+      { token: "3fc207", lat: 26.14, lng: 91.74, n: 61, sev: 0.18, tier: "green", growth: 0.03, growing: false },
+      { token: "3fc2f9", lat: 15.5, lng: 80.05, n: 44, sev: 0.15, tier: "green", growth: -0.11, growing: false },
+    ] as const
+  ).map(
+    (cell): S2Cell => ({
+      token: cell.token,
+      poly: cellPoly(cell.lat, cell.lng),
+      n: cell.n,
+      nLoc: Math.max(1, Math.round(cell.n / 12)),
+      sev: cell.sev,
+      tier: cell.tier,
+      growth: cell.growth,
+      growing: cell.growing,
+    }),
+  ),
+  points: [
+    {
+      lat: 28.6139,
+      lng: 77.209,
+      place: "New Delhi, Delhi, India",
+      n: 214,
+      sev: 0.74,
+      sevMax: 0.89,
+      tier: "red",
+      growing: true,
+      growth: 0.42,
+      mentions: 1_850,
+      tone: -4.2,
+    },
+    {
+      lat: 19.076,
+      lng: 72.8777,
+      place: "Mumbai, Maharashtra, India",
+      n: 186,
+      sev: 0.51,
+      sevMax: 0.63,
+      tier: "yellow",
+      growing: true,
+      growth: 0.18,
+      mentions: 1_210,
+      tone: -2.1,
+    },
+    {
+      lat: 22.5726,
+      lng: 88.3639,
+      place: "Kolkata, West Bengal, India",
+      n: 143,
+      sev: 0.48,
+      sevMax: 0.55,
+      tier: "yellow",
+      growing: false,
+      growth: -0.06,
+      mentions: 902,
+      tone: -1.4,
+    },
+    {
+      lat: 13.0827,
+      lng: 80.2707,
+      place: "Chennai, Tamil Nadu, India",
+      n: 128,
+      sev: 0.29,
+      sevMax: 0.41,
+      tier: "green",
+      growing: false,
+      growth: 0.09,
+      mentions: 640,
+      tone: 0.6,
+    },
+    {
+      lat: 17.385,
+      lng: 78.4867,
+      place: "Hyderabad, Telangana, India",
+      n: 84,
+      sev: 0.31,
+      sevMax: 0.38,
+      tier: "green",
+      growing: false,
+      growth: -0.22,
+      mentions: 410,
+      tone: 1.2,
+    },
+  ] satisfies readonly S2Point[],
 };
 
-export const FIXTURE_S2_CELLS: readonly S2Cell[] = [
-  {
-    token: "3f9c14",
-    level: 6,
-    label: "Northern plains",
-    centroid: { lat: 28.61, lng: 77.21 },
-    eventCount: 214,
-    severity: "critical",
-    trend: 0.42,
+/**
+ * A week of daily severity-composition buckets plus the derived KPI rollup,
+ * mirroring `GET /api/s2/series` (S2_GRID.md section 4.3 #7) for the metrics
+ * panel -- see `S2SeriesSummary`'s docstring for why this exists separately
+ * from `FIXTURE_S2_MAP`. `summary` is hand-picked to be a *plausible* reading
+ * of `buckets`' escalating red/yellow share, not arithmetically derived from
+ * it -- exact derivation isn't worth chasing for placeholder data (S2_GRID.md
+ * 2.4's acceleration is properly an hourly-bucket quantity; these are daily).
+ */
+export const FIXTURE_S2_SERIES: S2Series = {
+  span: "7d",
+  buckets: [
+    { bucket: "2026-08-19T00:00:00Z", green: 62, yellow: 18, red: 4 },
+    { bucket: "2026-08-20T00:00:00Z", green: 58, yellow: 21, red: 5 },
+    { bucket: "2026-08-21T00:00:00Z", green: 60, yellow: 24, red: 6 },
+    { bucket: "2026-08-22T00:00:00Z", green: 54, yellow: 27, red: 8 },
+    { bucket: "2026-08-23T00:00:00Z", green: 50, yellow: 30, red: 10 },
+    { bucket: "2026-08-24T00:00:00Z", green: 47, yellow: 33, red: 12 },
+    { bucket: "2026-08-25T00:00:00Z", green: 44, yellow: 35, red: 15 },
+  ],
+  summary: {
+    velocity: 3.9,
+    acceleration: 0.4,
+    meanTone: -3.1,
+    conflictShare: 0.34,
+    materialConflictShare: 0.14,
+    anomalyBuckets: 2,
   },
-  {
-    token: "3f9c2b",
-    level: 6,
-    label: "Western coast",
-    centroid: { lat: 19.08, lng: 72.88 },
-    eventCount: 186,
-    severity: "high",
-    trend: 0.18,
-  },
-  {
-    token: "3fa071",
-    level: 6,
-    label: "Eastern seaboard",
-    centroid: { lat: 22.57, lng: 88.36 },
-    eventCount: 143,
-    severity: "high",
-    trend: -0.06,
-  },
-  {
-    token: "3fa0c8",
-    level: 6,
-    label: "Southern peninsula",
-    centroid: { lat: 13.08, lng: 80.27 },
-    eventCount: 128,
-    severity: "elevated",
-    trend: 0.09,
-  },
-  {
-    token: "3fb133",
-    level: 6,
-    label: "Central highlands",
-    centroid: { lat: 23.26, lng: 77.41 },
-    eventCount: 97,
-    severity: "elevated",
-    trend: null,
-  },
-  {
-    token: "3fb1a4",
-    level: 6,
-    label: "Deccan interior",
-    centroid: { lat: 17.39, lng: 78.49 },
-    eventCount: 84,
-    severity: "elevated",
-    trend: -0.22,
-  },
-  {
-    token: "3fc207",
-    level: 6,
-    label: "North-eastern corridor",
-    centroid: { lat: 26.14, lng: 91.74 },
-    eventCount: 61,
-    severity: "routine",
-    trend: 0.03,
-  },
-  {
-    token: "3fc2f9",
-    level: 6,
-    label: "Coastal delta",
-    centroid: { lat: 15.5, lng: 80.05 },
-    eventCount: 44,
-    severity: "routine",
-    trend: -0.11,
-  },
-];
+};
 
 export const FIXTURE_NEWS_TOPICS: readonly NewsTopic[] = [
   {

@@ -122,12 +122,27 @@ export function ChatMapPlayback({
   // Draw (or snap) the path to the active location, separately from the
   // marker effect so the two can reason about "advanced by one" independently
   // of whatever triggers a marker re-render (e.g. an item revealing).
+  //
+  // `drawnIndexRef` must advance every time this effect runs, even if there
+  // is no map yet to draw on -- it used to be updated only after an
+  // `!map.isStyleLoaded()` guard, so a step that landed while the style was
+  // still reloading (a basemap `styledata` cycle from panning into new tile
+  // territory -- far more frequent on a long, geographically spread sequence
+  // than a short one) was silently skipped *and* left `drawnIndexRef` stale.
+  // The next successful run would then see `activeLocationIndex` several
+  // steps ahead of `drawnIndexRef`, fail the "advanced by one" check, and
+  // fall into the snap branch for the *whole* accumulated path at once --
+  // exactly "the line doesn't connect during the sequence, it just shows up
+  // at the end" for a many-location chat turn. `ensurePathLayer` throwing on
+  // a not-yet-loaded style is guarded by `safely()` below (and inside
+  // `animatePathGrowth`), so there is no need to gate the whole effect on
+  // style readiness to avoid that.
   useEffect(() => {
     const map = mapControllerRef.current?.getMap() ?? null;
-    if (!map || !map.isStyleLoaded()) return;
     cancelDrawRef.current();
     const from = drawnIndexRef.current;
     drawnIndexRef.current = activeLocationIndex;
+    if (!map) return;
     if (activeLocationIndex === from + 1) {
       cancelDrawRef.current = animatePathGrowth(map, locations, from, activeLocationIndex);
     } else {
@@ -331,7 +346,7 @@ function animatePathGrowth(
   fromIndex: number,
   toIndex: number,
 ): () => void {
-  ensurePathLayer(map);
+  safely(() => ensurePathLayer(map));
   const getSource = () => map.getSource(PATH_SOURCE_ID) as GeoJSONSource | undefined;
   const base: [number, number][] = locations
     .slice(0, Math.max(0, fromIndex + 1))
@@ -598,7 +613,7 @@ function createItemRow(item: ChatMediaItem, index: number, total: number): HTMLD
   );
 
   const kindRow = document.createElement("div");
-  kindRow.className = "flex items-center justify-between gap-2";
+  kindRow.className = "flex items-center gap-1.5";
   const kind = document.createElement("span");
   kind.className = cn(
     "intel-label rounded-full px-1.5 py-0.5",
@@ -607,8 +622,20 @@ function createItemRow(item: ChatMediaItem, index: number, total: number): HTMLD
   kind.textContent = item.kind === "news" ? "News" : "Social";
   kindRow.appendChild(kind);
 
+  // Only the cited case gets a badge -- every item at a location shows up
+  // here regardless of citation status (see `ChatMediaItem.cited`'s
+  // docstring), so marking the common case ("just found here, not quoted")
+  // would out-badge more tiles than it distinguishes. Cited is the fact
+  // worth calling out: it is what the answer's prose actually leaned on.
+  if (item.cited) {
+    const cited = document.createElement("span");
+    cited.className = "intel-label rounded-full bg-status-warning/15 px-1.5 py-0.5 text-status-warning";
+    cited.textContent = "Cited";
+    kindRow.appendChild(cited);
+  }
+
   const time = document.createElement("span");
-  time.className = "intel-numeral text-[9px] text-muted-foreground";
+  time.className = "intel-numeral ms-auto text-[9px] text-muted-foreground";
   time.textContent = new Date(item.timestamp).toLocaleString(undefined, {
     month: "short",
     day: "numeric",

@@ -39,6 +39,14 @@ export interface ChatMediaItem {
   sourceUrl?: string;
   /** ISO 8601. */
   timestamp: string;
+  /**
+   * Whether the answer's prose actually cited this item, as opposed to it
+   * merely being other retrieved coverage found at the same place -- see
+   * `MapMediaItem.cited` in `contracts.ts`. A location's `items` includes
+   * both; this is what lets the UI show the two differently instead of
+   * implying the model vetted every item equally.
+   */
+  cited: boolean;
 }
 
 export const EVENT_SEVERITIES = ["info", "warning", "critical"] as const;

@@ -431,6 +431,33 @@ function TurnView({ turn }: { turn: Turn }) {
   );
 }
 
+/**
+ * The original answer text truncated after its `count`-th whitespace-
+ * separated word, preserving the source's own newlines and blank lines
+ * exactly -- unlike `words.slice(0, count).join(" ")` (the previous
+ * approach), which collapses every paragraph break, heading newline, and
+ * list-item boundary into a single flat line. That destroys the Markdown
+ * structure `AnswerText` needs to tell a heading from a paragraph from a
+ * list item, permanently -- not just mid-reveal: `.join(" ")` is what the
+ * caller kept using even once `count` reached the full word count, so the
+ * *finished* answer never actually reached `AnswerText` as real Markdown
+ * either, which is why headings/lists/paragraphs kept rendering as a single
+ * flattened blob.
+ */
+function revealedPrefix(text: string, count: number): string {
+  if (count <= 0) return "";
+  const wordPattern = /\S+/g;
+  let seen = 0;
+  let match: RegExpExecArray | null;
+  while ((match = wordPattern.exec(text)) !== null) {
+    seen++;
+    if (seen >= count) {
+      return text.slice(0, match.index + match[0].length);
+    }
+  }
+  return text;
+}
+
 function ResponseView({
   response,
   revealedWords,
@@ -438,11 +465,12 @@ function ResponseView({
   response: ChatResponse;
   revealedWords: number;
 }) {
-  // Sliced on whitespace, not characters, so a citation marker like "[1]" is
-  // always revealed atomically -- never as a dangling "[" one frame before the
-  // "1]" -- and so this can never split mid-word.
+  // Word count only -- so a citation marker like "[1]" is always revealed
+  // atomically, never as a dangling "[" one frame before the "1]" -- but the
+  // actual visible slice comes from `revealedPrefix`, which walks the same
+  // word boundaries without discarding the original whitespace between them.
   const words = response.answer.split(/\s+/).filter(Boolean);
-  const visibleText = words.slice(0, revealedWords).join(" ");
+  const visibleText = revealedPrefix(response.answer, revealedWords);
   const revealing = revealedWords < words.length;
 
   return (
