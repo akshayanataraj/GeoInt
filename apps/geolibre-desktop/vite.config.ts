@@ -148,7 +148,7 @@ if (NO_EXTERNAL_CDN) {
 // fully offline build. The CDN URLs are pinned to the installed versions so they
 // cannot drift from the lockfile; PGlite resolves its own .wasm/.data/postgis.tar
 // relative to these. jsDelivr is already an allowed script-src in the web
-// (docker/nginx.conf) and desktop (tauri.conf.json) CSPs — it serves Pyodide — so
+// (nginx/default.conf) and desktop (tauri.conf.json) CSPs — it serves Pyodide — so
 // this adds no new external origin. Trade-off: the PostGIS SQL engine needs
 // network on FIRST use. After that, the web build's service worker runtime-caches
 // the jsDelivr-served Pyodide and PGlite/PostGIS engines (see the
@@ -178,7 +178,7 @@ const PWA_DISABLED = IS_TAURI_BUILD || IS_EMBED;
 // app can be hosted there at all. GitHub Pages allows 100 MB per file and needs
 // none of this.
 //
-// jsDelivr is already an allowed script-src in the web (docker/nginx.conf) and
+// jsDelivr is already an allowed script-src in the web (nginx/default.conf) and
 // desktop CSPs, and maplibre-gl-duckdb already loads its own DuckDB from there,
 // so this adds no new external origin. The web build's service worker
 // runtime-caches it after first use (the "geolibre-cdn-engines" rule below).
@@ -264,7 +264,7 @@ const PGLITE_POSTGIS_CDN_URL = pgliteCdnUrl("@electric-sql/pglite-postgis");
 // output; the small JS glue stays bundled and lazy-chunked. Override with
 // GEOLIBRE_CEREUS_CDN=0 to force-bundle the wasm for a fully offline build. The
 // URL is pinned to the installed version (so it tracks the lockfile) and jsDelivr
-// is already an allowed connect-src in both the web (docker/nginx.conf) and
+// is already an allowed connect-src in both the web (nginx/default.conf) and
 // desktop (tauri.conf.json) CSPs. Trade-off: the Sedona engine needs network on
 // first use (the desktop app already fetches PGlite, Pyodide, tiles, and the
 // DuckDB spatial extension the same way).

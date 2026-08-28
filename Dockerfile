@@ -107,22 +107,26 @@ RUN mkdir -p /data
 # hosts only this container can reach. Deliberately left unset: set it at
 # `docker run` time to enable PostGIS, or `*` to accept any connection string.
 
-# WARNING: docker/nginx.conf's CSP allows http://localhost:* / http://127.0.0.1:*
+# WARNING: nginx/default.conf's CSP allows http://localhost:* / http://127.0.0.1:*
 # (and ws:// equivalents) in connect-src for local-dev data sources (PMTiles/COGs
 # from a dev server on another port). This image is intended for local/single-user
 # use; on a public host those allowances let the served JS probe each visitor's
 # loopback. Drop them from the CSP before publishing publicly.
-# Ship nginx.conf as an immutable template (not loaded directly). entrypoint.sh
+# Ship default.conf as an immutable template (not loaded directly). entrypoint.sh
 # renders it to /etc/nginx/conf.d/default.conf on every boot, substituting the
 # per-launch sidecar token, so a container restart never keeps a stale token.
-COPY docker/nginx.conf /etc/nginx/nginx.conf.template
+COPY nginx/default.conf /etc/nginx/nginx.conf.template
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh \
   # Default auth snippet (disabled). entrypoint.sh rewrites it at start based
   # on GEOLIBRE_AUTH_USER/GEOLIBRE_AUTH_PASSWORD; baking a valid default keeps
   # `nginx -t` and non-entrypoint invocations working.
   && printf '# Basic Auth disabled (GEOLIBRE_AUTH_USER/GEOLIBRE_AUTH_PASSWORD not set).\n' > /etc/nginx/geolibre-auth.conf \
-  && printf '# AI proxy disabled (GEOLIBRE_AI_URL not set).\n' > /etc/nginx/geolibre-ai-proxy.conf
+  && printf '# AI proxy disabled (GEOLIBRE_AI_URL not set).\n' > /etc/nginx/geolibre-ai-proxy.conf \
+  # Media proxy is not opt-in (entrypoint.sh always rewrites it with a real
+  # location block), but a placeholder still has to exist here for the same
+  # `nginx -t`/non-entrypoint reason as the two above.
+  && printf '# Media proxy not yet configured by entrypoint.sh.\n' > /etc/nginx/geolibre-media-proxy.conf
 COPY --from=build /app/apps/geolibre-desktop/dist /usr/share/nginx/html
 
 EXPOSE 80

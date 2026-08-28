@@ -1,17 +1,16 @@
 /**
  * Static sample data for the intelligence console.
  *
- * Chat and its map-location data are real now (`client.ts`'s `sendChatMessage`
- * calls the live News service and maps its `map_locations` field) -- what's
- * left here backs the panels still running on fixtures: Event Feed
- * (`FIXTURE_NEWS_TOPICS`, mirroring `GET /news/recent`) and the S2 Grid layer
+ * News (chat and its map-location data, recent topics, country coordinates)
+ * is fully real now -- `client.ts` calls the live service for all of it. What's
+ * left here backs the one panel still running on fixtures: the S2 Grid layer
  * and panel (`FIXTURE_S2_MAP` mirrors `GET /api/s2/map`'s per-cell/per-point
  * geometry; `FIXTURE_S2_SERIES` mirrors `GET /api/s2/series`'s aggregate
  * KPI rollup -- see `s2-contracts.ts` for why the panel is built against the
- * latter rather than re-deriving from the former), since the S2 module is
- * still an empty backend scaffold. They exist to make
- * the layout, density, and visual design reviewable at realistic volumes,
- * which an empty console cannot be.
+ * latter rather than re-deriving from the former), since `modules/s2/` on the
+ * service is still an empty scaffold with zero real routes. These exist to
+ * make the layout, density, and visual design reviewable at realistic
+ * volumes, which an empty console cannot be.
  *
  * Rules for anything added here:
  *
@@ -30,7 +29,6 @@
  * Delete each fixture here once its panel's endpoint returns real data.
  */
 
-import type { NewsTopic } from "./contracts";
 import type { S2Cell, S2MapData, S2Point, S2Series } from "./s2-contracts";
 
 /**
@@ -183,75 +181,3 @@ export const FIXTURE_S2_SERIES: S2Series = {
   },
 };
 
-export const FIXTURE_NEWS_TOPICS: readonly NewsTopic[] = [
-  {
-    id: "topic-1",
-    headline: "Monsoon flooding disrupts freight rail across two districts",
-    snippet:
-      "Regional operators reported suspended services after track inspections, with diversions in place while water levels are monitored.",
-    url: "https://example.org/reports/rail-monsoon-disruption",
-    source: "Regional Wire",
-    country: "India",
-    published_at: "2026-08-25T06:40:00Z",
-    timeline: [
-      { date: "2026-08-23", event: "Heavy rainfall warning issued", url: "https://example.org/1" },
-      { date: "2026-08-24", event: "Track inspection begins", url: "https://example.org/2" },
-      { date: "2026-08-25", event: "Freight services suspended", url: "https://example.org/3" },
-    ],
-  },
-  {
-    id: "topic-2",
-    headline: "Port authority publishes revised container throughput figures",
-    snippet:
-      "Quarterly figures were restated following a reconciliation of transshipment volumes; the authority described the change as procedural.",
-    url: "https://example.org/reports/port-throughput",
-    source: "Trade Monitor",
-    country: "India",
-    published_at: "2026-08-25T05:15:00Z",
-    timeline: [
-      { date: "2026-08-20", event: "Initial figures released", url: "https://example.org/4" },
-      { date: "2026-08-25", event: "Revised figures published", url: "https://example.org/5" },
-    ],
-  },
-  {
-    id: "topic-3",
-    headline: "Cross-border trade delegation talks conclude without joint statement",
-    snippet:
-      "Both delegations confirmed the sessions ended as scheduled. No joint communique was issued and no follow-up date was announced.",
-    url: "https://example.org/reports/trade-delegation",
-    source: "Wire Service",
-    country: "China",
-    published_at: "2026-08-24T18:30:00Z",
-    timeline: [
-      { date: "2026-08-22", event: "Delegation arrives", url: "https://example.org/6" },
-      { date: "2026-08-24", event: "Talks conclude", url: "https://example.org/7" },
-    ],
-  },
-  {
-    id: "topic-4",
-    headline: "Coastal weather advisory extended for fishing fleets",
-    snippet:
-      "The advisory was extended by 48 hours covering an additional stretch of coastline, with harbours asked to hold small craft.",
-    url: "https://example.org/reports/coastal-advisory",
-    source: "Maritime Bulletin",
-    country: "India",
-    published_at: "2026-08-24T14:05:00Z",
-    timeline: [
-      { date: "2026-08-24", event: "Advisory extended", url: "https://example.org/8" },
-    ],
-  },
-  {
-    id: "topic-5",
-    headline: "Regional airport reports scheduling backlog after equipment fault",
-    snippet:
-      "A ground-handling equipment fault produced knock-on delays through the evening; the operator said normal scheduling resumed overnight.",
-    url: "https://example.org/reports/airport-backlog",
-    source: "Aviation Desk",
-    country: "India",
-    published_at: "2026-08-24T09:20:00Z",
-    timeline: [
-      { date: "2026-08-23", event: "Equipment fault reported", url: "https://example.org/9" },
-      { date: "2026-08-24", event: "Scheduling normalised", url: "https://example.org/10" },
-    ],
-  },
-];

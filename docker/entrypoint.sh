@@ -123,6 +123,76 @@ else
   printf '# AI proxy disabled (GEOLIBRE_AI_URL not set).\n' > "$AI_PROXY_CONF"
 fi
 
+# Media (News/Social) backend proxy for the analyst intelligence console.
+# Unlike the AI proxy above this is not opt-in -- the console's own panels
+# depend on it -- so it always writes a location block, defaulting to the
+# currently-known dev deployment. Same reasoning as /sidecar/: the browser
+# calls the same-origin /media route and never holds the bearer token: nginx
+# injects it server-side. This also sidesteps that deployment's own strict
+# CORS allowlist, which rejects every origin this app could plausibly be
+# served from (confirmed against the live host) -- a server-to-server proxy
+# request carries no browser Origin at all once cleared below, so the
+# backend's CORS check (a browser-only mechanism) never enters into it.
+GEOLIBRE_MEDIA_API_URL="${GEOLIBRE_MEDIA_API_URL:-http://10.10.180.48:8302}"
+GEOLIBRE_MEDIA_API_TOKEN="${GEOLIBRE_MEDIA_API_TOKEN:-revamp-local-dev-token-8302}"
+export GEOLIBRE_MEDIA_API_URL GEOLIBRE_MEDIA_API_TOKEN
+
+case "$GEOLIBRE_MEDIA_API_TOKEN" in
+  "" | *[!A-Za-z0-9._-]*)
+    echo "ERROR: GEOLIBRE_MEDIA_API_TOKEN must be non-empty and contain only [A-Za-z0-9._-]." >&2
+    exit 1
+    ;;
+esac
+
+python -c '
+import os
+from urllib.parse import urlsplit
+
+upstream = os.environ["GEOLIBRE_MEDIA_API_URL"].rstrip("/")
+parsed = urlsplit(upstream)
+if (
+    parsed.scheme not in ("http", "https")
+    or not parsed.hostname
+    or parsed.username
+    or parsed.password
+    or parsed.path not in ("", "/")
+    or parsed.query
+    or parsed.fragment
+):
+    raise SystemExit(
+        "ERROR: GEOLIBRE_MEDIA_API_URL must be an http(s) origin without credentials, path, query, or fragment."
+    )
+
+host = parsed.hostname
+authority = f"[{host}]" if ":" in host else host
+host_header = authority if parsed.port is None else f"{authority}:{parsed.port}"
+tls = "\n".join([f"    proxy_ssl_server_name on;", f"    proxy_ssl_name {host};"]) if parsed.scheme == "https" else ""
+
+token = os.environ["GEOLIBRE_MEDIA_API_TOKEN"]
+config = f"""
+location /media/ {{
+    proxy_pass {upstream}/api/v1/media/;
+    proxy_http_version 1.1;
+{tls}
+    proxy_set_header Host {host_header};
+    proxy_set_header Authorization "Bearer {token}";
+    proxy_set_header Origin "";
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_connect_timeout 5s;
+    # News/Social chat calls are LLM-bound. The service'"'"'s own frontend guide
+    # suggests 120s as a starting point, but a real measured chat call against
+    # this deployment took ~180s -- generous headroom over that, matched by
+    # REQUEST_TIMEOUT_MS on the client side (client.ts), since either one
+    # alone would still cut the request off.
+    proxy_read_timeout 600s;
+}}
+"""
+open("/etc/nginx/geolibre-media-proxy.conf", "w").write(config)
+'
+chmod 640 /etc/nginx/geolibre-media-proxy.conf
+echo "Media backend proxy enabled at /media/ -> $GEOLIBRE_MEDIA_API_URL/api/v1/media/"
+
 # Runtime config the app reads at load (index.html pulls it in before the
 # bundle). Written on every boot, after the optional blocks above have exported
 # their values, so toggling any of these env vars across restarts takes effect.

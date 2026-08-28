@@ -39,7 +39,7 @@ export function selectDuckDbBundle(): Promise<duckdb.DuckDBBundle> {
  * `duckdb-browser-*.worker.js` is a plain IIFE rather than an ES module.
  *
  * CSP: this needs `worker-src blob:` and the CDN in `script-src`, both already
- * present in docker/nginx.conf for jsDelivr's `/npm/` path. The nested
+ * present in nginx/default.conf for jsDelivr's `/npm/` path. The nested
  * `importScripts` is matched against `script-src`, not `worker-src` -- verified
  * against that exact policy in Chromium and Firefox, the latter because it has
  * historically checked worker sub-resources against `worker-src`/`child-src`

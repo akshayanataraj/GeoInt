@@ -3,10 +3,14 @@
  *
  * Source of truth is the FastAPI service at
  * `Fotress_SNSF/services/news_and_social_media_service`, specifically the
- * Pydantic models under `src/media_service/modules/news/schemas/`. These are
- * hand-written mirrors rather than generated types because the service is still
- * being built and does not publish an OpenAPI artifact yet; when it does,
- * generate from that and delete this file.
+ * Pydantic models under `src/media_service/modules/news/schemas/`, as
+ * documented in `Fotress_SNSF/docs/MEDIA_SERVICE_FRONTEND_INTEGRATION_GUIDE.md`
+ * (the authoritative frontend-facing reference -- the service's own
+ * `/openapi.json` exists too, but this guide is verified against it and reads
+ * more like a contract than a schema dump). These are hand-written mirrors
+ * rather than generated types because that OpenAPI document is still
+ * FastAPI's default auto-generated one, not curated for client generation;
+ * revisit generating from it if that changes.
  *
  * Field names and optionality are copied exactly, including the parts that look
  * like they should be tidied:
@@ -128,6 +132,20 @@ export interface ConversationTurn {
   failed_stage: string | null;
   error_text: string;
   created_at: string;
+}
+
+/**
+ * `GET /api/v1/media/news/sessions/{session_id}/history`'s full response.
+ * Turns are chronological (`sequence ASC`). Deliberately thin: it carries only
+ * `answer_markdown` per turn -- no citations, map locations, degradations, or
+ * metrics survive a reload (guide §5.1/§17). A restored turn's citations need
+ * a separate per-turn call (`fetchNewsTurnCitations`); its map locations and
+ * diagnostics are not recoverable at all.
+ */
+export interface NewsSessionHistory {
+  session_id: string;
+  turn_count: number;
+  turns: ConversationTurn[];
 }
 
 /** `TimelineEventOut` -- one dated step within a recent topic. */
